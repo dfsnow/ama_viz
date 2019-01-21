@@ -1,3 +1,97 @@
 ]0;/home/dfsnow/school/ama_viz]0;dfsnow@neptune: ~/school/ama_viz[01;32mdfsnow@neptune[00m:[01;34m~/school/ama_viz[00m$ [K]0;dfsnow@neptune: ~/school/ama_viz[01;32mdfsnow@neptune[00m:[01;34m~/school/ama_viz[00m$ git init
 Initialized empty Git repository in /home/dfsnow/school/ama_viz/.git/
 ]0;/home/dfsnow/school/ama_viz]0;dfsnow@neptune: ~/school/ama_viz[01;32mdfsnow@neptune[00m:[01;34m~/school/ama_viz[00m$ git add .
+]0;/home/dfsnow/school/ama_viz]0;dfsnow@neptune: ~/school/ama_viz[01;32mdfsnow@neptune[00m:[01;34m~/school/ama_viz[00m$ git commit -m "Initial commit"
+[master (root-commit) 2887545] Initial commit
+ 47 files changed, 1989 insertions(+)
+ create mode 100644 .Rproj.user/650BAC9D/console06/DB2E7A9E
+ create mode 100644 .Rproj.user/650BAC9D/console06/DB2E7A9E.env
+ create mode 100644 .Rproj.user/650BAC9D/console06/INDEX001
+ create mode 100644 .Rproj.user/650BAC9D/sources/prop/184502A6
+ create mode 100644 .Rproj.user/650BAC9D/sources/prop/64DBD112
+ create mode 100644 .Rproj.user/650BAC9D/sources/prop/67CE2F31
+ create mode 100644 .Rproj.user/650BAC9D/sources/prop/96B644F5
+ create mode 100644 .Rproj.user/650BAC9D/sources/prop/995FEF06
+ create mode 100644 .Rproj.user/650BAC9D/sources/prop/E1D2BEE9
+ create mode 100644 .Rproj.user/650BAC9D/sources/prop/E9A21BE0
+ create mode 100644 .Rproj.user/650BAC9D/sources/prop/INDEX
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/1C212554
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/1C212554-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/29757EB7
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/29757EB7-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/3284E5BF-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/3D44CD54-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/4718CC95
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/4718CC95-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/50EA63CA
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/50EA63CA-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/56B06352
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/56B06352-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/95ED028-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/A2FEA347-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/A61D4086-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/B08BD363-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/B27E52B5-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/B983B39F-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/CD907EAF-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/D3422DE9-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/ED21EB5-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/ED304039-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/F3D95DA1-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/F8DA9E7
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/F8DA9E7-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/FDC44B73-contents
+ create mode 100644 .Rproj.user/650BAC9D/sources/s-d7a6fd6c/lock_file
+ create mode 100644 .Rproj.user/shared/notebooks/patch-chunk-names
+ create mode 100644 .Rproj.user/shared/notebooks/paths
+ create mode 100644 .gitignore
+ create mode 100644 access_merge.R
+ create mode 100644 ama_filter.R
+ create mode 100644 exploratory_plots.R
+ create mode 100644 p1_pop_pyramid.pdf
+ create mode 100644 p2_arrows.pdf
+ create mode 100644 p3_specialists.pdf
+]0;/home/dfsnow/school/ama_viz]0;dfsnow@neptune: ~/school/ama_viz[01;32mdfsnow@neptune[00m:[01;34m~/school/ama_viz[00m$ git rm --cached .Rproj.user/
+fatal: not removing '.Rproj.user/' recursively without -r
+]0;/home/dfsnow/school/ama_viz]0;dfsnow@neptune: ~/school/ama_viz[01;32mdfsnow@neptune[00m:[01;34m~/school/ama_viz[00m$ git rm --cached .Rproj.user/[C[C[1@-[1@r[1@ 
+rm '.Rproj.user/650BAC9D/console06/DB2E7A9E'
+rm '.Rproj.user/650BAC9D/console06/DB2E7A9E.env'
+rm '.Rproj.user/650BAC9D/console06/INDEX001'
+rm '.Rproj.user/650BAC9D/sources/prop/184502A6'
+rm '.Rproj.user/650BAC9D/sources/prop/64DBD112'
+rm '.Rproj.user/650BAC9D/sources/prop/67CE2F31'
+rm '.Rproj.user/650BAC9D/sources/prop/96B644F5'
+rm '.Rproj.user/650BAC9D/sources/prop/995FEF06'
+rm '.Rproj.user/650BAC9D/sources/prop/E1D2BEE9'
+rm '.Rproj.user/650BAC9D/sources/prop/E9A21BE0'
+rm '.Rproj.user/650BAC9D/sources/prop/INDEX'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/1C212554'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/1C212554-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/29757EB7'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/29757EB7-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/3284E5BF-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/3D44CD54-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/4718CC95'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/4718CC95-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/50EA63CA'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/50EA63CA-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/56B06352'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/56B06352-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/95ED028-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/A2FEA347-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/A61D4086-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/B08BD363-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/B27E52B5-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/B983B39F-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/CD907EAF-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/D3422DE9-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/ED21EB5-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/ED304039-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/F3D95DA1-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/F8DA9E7'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/F8DA9E7-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/FDC44B73-contents'
+rm '.Rproj.user/650BAC9D/sources/s-d7a6fd6c/lock_file'
+rm '.Rproj.user/shared/notebooks/patch-chunk-names'
+rm '.Rproj.user/shared/notebooks/paths'
+]0;/home/dfsnow/school/ama_viz]0;dfsnow@neptune: ~/school/ama_viz[01;32mdfsnow@neptune[00m:[01;34m~/school/ama_viz[00m$ git rm -r --cached .Rproj.user/[3P[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Ccommit -m "Initial commit"add .[K
