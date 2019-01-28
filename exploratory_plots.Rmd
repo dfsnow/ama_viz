@@ -1,0 +1,495 @@
+---
+title: 'The Coming Crisis: The Changing Demographics of Physicians in Rural America'
+author: "Dan Snow"
+date: "1/28/2019"
+output: 
+  html_document:
+    code_folding: hide
+    theme: lumen
+---
+
+```{r setup, warning=FALSE, message=FALSE}
+library(lubridate)
+library(tidyverse)
+library(scales)
+library(ggrepel)
+library(viridis)
+library(tidycensus)
+library(sf)
+```
+
+```{r data_load, warning=FALSE, message=FALSE}
+# Load and clean all data
+source("access_merge.R")
+source("ama_filter.R")
+
+cbsa_pop <- read_csv("data/tract_qcbsa_2015.csv") %>%
+  group_by(qcbsa) %>%
+  summarize(pop = sum(tract_pop, na.rm = T)) %>%
+  mutate(rural = between(`qcbsa`, 0, 2)) %>%
+  group_by(rural) %>%
+  summarize(pop = sum(pop))
+```
+
+# Rurality
+
+Rural American doctors are getting older. This plot shows the distribution of all U.S. physicians by age and rurality of practice. Rurality is determined by geocoding each physician's address, spatially intersecting it with a core-based statistical area (CBSAs), and then ranking all the CBSAs by overall population decile. The lowest two deciles are considered rural. The goal of this plot is to show the difference in age distribution between rural and urban physicians. Most of the mass of the urban physician distribution is around 40 years old, while most of the mass for rural physicians is around 60. 
+
+```{r p1, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
+# Plot 1: Population Pyramid
+ama_filtered %>%
+  mutate(
+    age = cut(
+      year(now()) - yob, 
+      breaks = c(seq(0, 100, by = 5), Inf), 
+      labels = c(paste(
+        seq(0, 95, by = 5),
+        seq(0 + 5 - 1, 100 - 1, by = 5),
+        sep = "-"),
+        paste(100, "+", sep = "")),
+      right = FALSE),
+    rural = between(`geoid_qcbsa`, 0, 2)
+    ) %>%
+  group_by(age, rural) %>%
+  summarize(doc_count = n()) %>%
+  filter(!is.na(rural)) %>%
+  left_join(cbsa_pop, by = "rural") %>%
+  mutate(
+    docs_per_100k = (doc_count / pop) * 1e5,
+    docs_per_100k = ifelse(rural == "TRUE", docs_per_100k, -docs_per_100k),
+    rural = ifelse(rural == "TRUE", "Rural", "Urban")
+    ) %>%
+  filter(!(age %in% c("100+", "95-99", "90-94", "85-89", "80-84", "20-24"))) %>%
+  ggplot() +
+    geom_bar(aes(x = age, y = docs_per_100k, fill = rural), stat = "identity") +
+    scale_y_continuous(
+      labels = abs,
+      limits = c(-45, 45),
+      breaks = seq(-40, 40, 10)
+      ) +
+    scale_fill_brewer(
+      name = "Type",
+      palette = "Set1",
+      breaks = c("Urban", "Rural")
+      ) +
+    coord_flip(clip = "off") +
+    theme_bw() +
+    labs(
+      title = "Rural Doctors Are Scarcer and Older",
+      subtitle = paste("Young doctors avoid moving to rural areas,",
+                       "leaving older doctors to pick up the slack"),
+      caption = "Source: American Medical Association Master File",
+      y = "Doctors Per 100K People",
+      x = "Doctor Age"
+    ) + 
+    theme(
+      plot.title = element_text(size = 16),
+      plot.subtitle = element_text(
+        color = "grey35",
+        margin = margin(b = 7),
+        size = 12),
+      plot.caption = element_text(color = "grey35"),
+      panel.grid.minor = element_blank(),
+      axis.title.x = element_text(margin = margin(t = 5)),
+      axis.title.y = element_text(margin = margin(r = 7)),
+      axis.title = element_text(size = 13),
+      axis.text = element_text(size = 11),
+      axis.text.y = element_text(margin = margin(r = 5)),
+      axis.text.x = element_text(margin = margin(t = 5)),
+      legend.justification = "top",
+      legend.position = c(0.87, .15),
+      legend.text = element_text(
+        color = "grey35",
+        size = 12,
+        margin = margin(l = 3, r = 14)),
+      legend.key.height = unit(1.13, "cm"),
+      legend.title = element_blank(),
+      legend.background = element_blank()
+      ) +
+    guides(fill = guide_legend(
+      override.aes = list(linetype = 0, size = 5), nrow = 1)) +
+    annotate(
+      "rect", ymin = 25, ymax = Inf,
+      xmin = 1.02, xmax = 1.98, fill = "white") + 
+    ggsave("plots/p1_pop_pyramid.pdf", width = 9, height = 7) 
+```
+
+Using birth CBSA as a starting point, this plot shows where different cohorts of physicians end up attending medical school, doing their residency, and practicing. Each line represents the cohort of physicians born in 1 of 10 CBSA deciles. Each shaded region represents a different level of rurality. The goal of this plot is to show that nearly all doctors end up practicing in urban and suburban areas, regardless of their place of birth.
+
+```{r p4, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
+# Plot 4: Rurality
+period_labels <- c("Birth", "Med School", "Residency", "2003", "2008", "2013", "Current")
+ama_filtered %>%
+  filter(yot <= 1998) %>%
+  group_by(birth_qcbsa) %>%
+  summarize(
+    t1 = mean(med_qcbsa, na.rm = T),
+    t2 = mean(res_qcbsa, na.rm = T),
+    t3 = mean(`2003_qcbsa`, na.rm = T),
+    t4 = mean(`2008_qcbsa`, na.rm = T),
+    t5 = mean(`2013_qcbsa`, na.rm = T),
+    t6 = mean(`geoid_qcbsa`, na.rm = T)
+    ) %>%
+  filter(!is.na(birth_qcbsa)) %>%
+  mutate(bcbsa = birth_qcbsa) %>%
+  gather(key = period, value = rurality, -bcbsa) %>%
+  mutate(period = replace(period, period == "birth_qcbsa", "t0")) %>%
+ggplot() +
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf,
+                ymax = 2.5), fill = "grey95", alpha = 0.05) +
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 2.5,
+                ymax = 4), fill = "white", alpha = 0.05) +
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 4,
+                ymax = 6), fill = "grey95", alpha = 0.05) +
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 6,
+                ymax = 8.25), fill = "white", alpha = 0.05) +
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 8.25,
+                ymax = Inf), fill = "grey95", alpha = 0.05) +
+  geom_line(aes(x = period, y = rurality,
+                color = bcbsa, group = bcbsa), size = 1.1) +
+  geom_vline(xintercept = 1, linetype = "longdash", color = "grey45") +
+  scale_x_discrete(
+    labels = period_labels,
+    expand = expand_scale(mult = c(0.2, 0.05))
+    ) +
+  scale_color_viridis_c(end = 0.8, direction = -1) +
+  theme_bw() +
+  labs(
+    title = "Regardless of Birthplace, Doctors Move to Urban Areas",
+    subtitle = paste("Ten cohorts of doctors, sorted by the rurality of their",
+                     "birthplace CBSA, end up in urban and suburban areas"),
+    x = "Event / Period",
+    caption = "Source: American Medical Association Master File"
+  ) +
+  theme(
+    plot.title = element_text(size = 16),
+    plot.subtitle = element_text(
+      color = "grey35",
+      margin = margin(b = 7),
+      size = 12),
+    plot.caption = element_text(color = "grey35"),
+    axis.title.x = element_text(margin = margin(t = 8), size = 14),
+    axis.text = element_text(size = 11),
+    axis.text.y.left = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid.major.x = element_line(color = "grey60"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title.y.left = element_blank(),
+    axis.text.y = element_text(margin = margin(r = 5)),
+    axis.text.x = element_text(size = 12, margin = margin(t = 5)),
+    legend.position = "none"
+  ) +
+  annotate("text", label = "Rural", x = 0.4, y = 1.5,
+           size = 7, color = "grey65", fontface = 2) +
+  annotate("text", label = "Small\nTown", x = 0.4, y = 3.25,
+           size = 7, color = "grey65", fontface = 2, lineheight = 0.9) +
+  annotate("text", label = "Sub-\nUrban", x = 0.4, y = 5,
+           size = 7, color = "grey65", fontface = 2, lineheight = 0.9) +
+  annotate("text", label = "Urban", x = 0.4, y = 7,
+           size = 7, color = "grey65", fontface = 2) +
+  annotate("text", label = "Urban\nCore", x = 0.4, y = 9.25,
+           size = 7, color = "grey65", fontface = 2, lineheight = 0.9) +
+  annotate("segment", x = 1.02, xend = 1.38,
+           y = 1, yend = 1.2, color = "grey45") +
+  annotate("text",
+    label = paste0(
+      "These doctors represent the cohort born in the most rural\n",
+      "Core-based Statistical Area (CBSA), think rural Kansas"),
+    x = 1.41, y = 1.45, color = "grey35", hjust = 0, lineheight = 0.9
+    ) +
+  annotate("segment", x = 2.02, xend = 2.25,
+           y = 5.35, yend = 3.75, color = "grey45") +
+  annotate("text",
+    label = paste0(
+      "Almost all medical schools are in urban areas,\n",
+      "so medical students are mechanically forced to move"),
+    x = 2.28, y = 3.51, color = "grey35", hjust = 0, lineheight = 0.9
+    ) + 
+  annotate("segment", x = 3.02, xend = 3.15, y = 8, yend = 9, color = "grey45") +
+  annotate("text",
+    label = paste0(
+      "After medical school, doctors disperse to more\n",
+      "rural residency programs - doctors from rural areas\n",
+      "select more rural programs than those from cities"),
+    x = 3.17, y = 9.5, color = "grey35", hjust = 0, lineheight = 0.9
+    ) +
+  annotate("segment", x = 4.02, xend = 4.21,
+           y = 7.355, yend = 7.9, color = "grey45") +
+  annotate("text",
+    label = paste0(
+      "Once doctors choose a practice\n",
+      "location they tend to stay put"),
+    x = 4.25, y = 7.85, color = "grey35", hjust = 0, lineheight = 0.9
+    ) +
+  ggsave("plots/p4_rurality.pdf", width = 9, height = 7)
+
+```
+
+# Map
+
+This map shows the relative physician density rank of all states. Physician density is calculated as the number of physicians per 100K people. This density measure is then grouped into sextiles for easier viewing. The overall goal of this plot is to show that rural and poor states face the largest physician shortfalls, while the northeast has a relative surplus.
+
+```{r p5, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
+# Plot 5: Map
+p5_map <- get_acs(
+  geography = "state",
+  variables = c(pop = "B01001_001"),
+  geometry = TRUE,
+  shift_geo = TRUE) 
+
+p5_data <- ama_filtered %>% 
+  filter(!is.na(fips_state)) %>%
+  group_by(fips_state) %>%
+  summarize(doc_count = n()) 
+  
+p5_map %>%
+  st_transform(2163) %>%
+  left_join(p5_data, by = c("GEOID" = "fips_state")) %>%
+  mutate(docs_per_100k = (doc_count / estimate) * 1e5) %>%
+  mutate(docs_ntile = ntile(docs_per_100k, 6)) %>%
+  filter(GEOID != "11") %>% 
+ggplot() +
+  geom_sf(aes(fill = factor(docs_ntile)), color = "white", size = 0.5) +
+  scale_fill_brewer(
+    name = "Sextiles of Docs\nPer 100K Pop.",
+    palette = "RdBu",
+    labels = c("Relative\nShortage", rep("", 4), "Relative\nSurplus")
+    ) +
+  labs(
+    title = "Rural States Have a Shortage of Doctors Relative to Their Population",
+    subtitle = paste0(
+      "Measuring physician density per 100k people, the South, Southwest\n",
+      "and Great Plains all face a shortage of both specialists and GPs"),
+    caption = "Source: American Medical Association Master File"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(size = 16, margin = margin(t = 10), hjust = .7),
+    plot.subtitle = element_text(
+      color = "grey35",
+      hjust = .7,
+      margin = margin(t = 7, b = -35),
+      size = 12,
+      lineheight = 0.95),
+    plot.caption = element_text(
+      color = "grey35",
+      hjust = 0.1,
+      margin = margin(t = -20)),
+    panel.grid.major = element_line(color = "transparent"),
+    panel.grid.minor = element_blank(),
+    legend.title = element_text(
+      color = "grey25",
+      size = 13,
+      hjust = 1,
+      margin = margin(l = -20, r = 8)),
+    legend.text = element_text(
+      color = "grey45",
+      size = 11,
+      margin = margin(r = 4)),
+    legend.position = c(0.99, .22),
+    legend.justification = "right"
+  ) +
+  guides(fill = guide_legend(label.position = "left", title.hjust = 1)) + 
+  ggsave("plots/p5_map.pdf", width = 9, height = 7)
+
+```
+
+# Schools
+
+Better medical schools send their graduates to more urban areas. This plot shows the average MCAT score of each medical school vs the rurality of the location the school's graduates end up practicing. More urban, more competitive schools almost always send their graduates to cities. 
+
+```{r p2, message=FALSE, warning=FALSE, fig.width=9, fig.height=7, fig.align='center'}
+# Plot 2: Points
+ur_labels <- c(rep("", 2), "More Rural", rep("", 3),
+               "Suburban", rep("", 3), "More Urban", rep("", 2))
+
+p2_data <- ama_filtered %>%
+  group_by(med_school_id, med_address) %>%
+  summarize(
+    st_count = n(),
+    avg_score = mean(med_mcat_score, na.rm = T),
+    prac_qcbsa = mean(`2013_qcbsa`, na.rm = T)
+    ) %>%
+  filter(!is.na(avg_score) & st_count >= 1000) 
+
+p2_data_labels <- p2_data %>%
+  filter(med_school_id %in% c("03519", "02701", "05101", "00514")) %>%
+  bind_cols(school_name = c( "UCLA", "Ole Miss", "NYU", "UVA"))
+
+ggplot() +
+  geom_point(
+    data = p2_data,
+    aes(x = prac_qcbsa, y = avg_score, size = st_count),
+    alpha = 0.3,
+    color = "grey25",
+    fill = "grey25"
+    ) +
+  stat_smooth(
+    data = p2_data,
+    aes(x = prac_qcbsa, y = avg_score, weight = st_count),
+    method = "lm",
+    fullrange = T,
+    se = F,
+    size = 1.5,
+    color = "#e41a1c"
+    ) +
+  geom_text_repel(
+    data = p2_data_labels,
+    aes(x = prac_qcbsa, y = avg_score, label = school_name),
+    color = "grey25",
+    segment.color = "grey35",
+    nudge_y = -1.4,
+    nudge_x = -0.1
+  ) +
+  scale_x_continuous(
+    limits = c(3, 9),
+    expand = c(0, 0), 
+    breaks = seq(3, 9, 0.5),
+    labels = ur_labels
+    ) +
+  scale_y_continuous(limits = c(499, 521), breaks = seq(499, 521, by = 4)) +
+  scale_size_continuous(name = "# of Graduates") +
+  labs(
+    title = "Competitive Medical Schools Send Their Graduates to Urban Areas",
+    subtitle = paste("The higher the average MCAT score of the school,", 
+                     "the more likely its graduates are to practice in a city"),
+    x = "Average Graduate Practice Location",
+    y = "School MCAT Score",
+    caption = "Source: American Medical Association Master File"
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 16),
+    plot.subtitle = element_text(
+      color = "grey35",
+      margin = margin(b = 7),
+      size = 12),
+    plot.caption = element_text(
+      color = "grey35",
+      margin = margin(t = 7)),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    axis.title.x = element_text(margin = margin(t = 5)),
+    axis.title.y = element_text(margin = margin(r = 7)),
+    axis.title = element_text(size = 13),
+    axis.text = element_text(size = 11),
+    axis.ticks.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.y = element_text(margin = margin(r = 5)),
+    axis.text.x = element_text(size = 12, margin = margin(t = 5)),
+    legend.justification = "top",
+    legend.title = element_text(color = "grey25", size = 13),
+    legend.text = element_text(color = "grey45", size = 11),
+    legend.position = c(.1, .98)
+  ) +
+  annotate(
+    "rect", xmin = 3, xmax = 4.2,
+    ymin = 513, ymax = Inf, fill = "white") +
+  ggsave("plots/p2_points.pdf", width = 9, height = 7)
+```
+
+# Specialties
+
+This plot shows the number of doctors trained per year separated by specialty/general practice. An increasing number of specialists are trained each year compared to GPs, and this trend has gotten worse since the early 2000s. 
+
+```{r p3, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
+# Plot 3: Lines
+primary_care_codes <- c("ADL", "AMF", "AMI", "FMP", "FP", "FPG",
+                        "GP", "GPM", "IM", "IMG", "IPM", "MPD", "PD")
+
+p3_data <- ama_filtered %>%
+  filter(between(yot, 1900, 2016)) %>%
+  mutate(
+    GP = ifelse(
+      primary_specialty %in% primary_care_codes,
+      "Primary Care",
+      "Specialist")
+    ) %>% 
+  group_by(yot, GP) %>%
+  summarize(doc_count = n()) %>%
+  filter(yot >= 1975)
+
+p3_data_diff <- p3_data %>%
+  spread(key = GP, value = doc_count) %>%
+  filter(yot %in% c(1980, 2000, 2015)) %>%
+  mutate(diff = `Specialist` - `Primary Care`)
+
+ggplot() +
+  geom_line(
+    data = p3_data,
+    aes(x = yot, y = doc_count, color = factor(GP)),
+    size = 1.5
+    ) +
+  geom_segment(
+    data = p3_data_diff,
+    aes(x = yot, xend = yot, y = `Primary Care`, yend = `Specialist`),
+    color = "grey30",
+    linetype = "longdash"
+    ) +
+  scale_color_brewer(palette = "Set1") +
+  scale_x_continuous(breaks = seq(1975, 2016, by = 5)) +
+  scale_y_continuous(
+    breaks = seq(0, 20000, by = 4000), 
+    labels = comma,
+    limits = c(0, 20000)
+    ) + 
+  labs(
+    title = "More Doctors Are Becoming Specialists",
+    subtitle = paste("As tuition costs rise, lucrative specialities",
+                     "are attracting more and more medical students"),
+    x = "Year of Training",
+    y = "Number of Doctors Trained Per Year",
+    caption = "Source: American Medical Association Master File"
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 16),
+    plot.subtitle = element_text(
+      color = "grey35",
+      margin = margin(b = 7),
+      size = 12),
+    plot.caption = element_text(color = "grey35"),
+    axis.title.x = element_text(margin = margin(t = 7)),
+    axis.title.y = element_text(margin = margin(r = 4)),
+    axis.title = element_text(size = 13),
+    axis.text = element_text(size = 11),
+    panel.grid.minor = element_blank(),
+    axis.text.y = element_text(margin = margin(r = 5)),
+    axis.text.x = element_text(size = 12, margin = margin(t = 5)),
+    legend.position = "none"
+  ) +
+  guides(colour = guide_legend(nrow = 1)) +
+  annotate(
+    "text", label = "Specialists", x = 2012,
+    y = 18900, size = 5, color = "#377eb8") + 
+  annotate(
+    "text", label = "Primary Care", x = 2012,
+    y = 6500, size = 5, color = "#e41a1c") + 
+  annotate(
+    "text", label = paste0(p3_data_diff$diff[1]),
+    x = 1978.5, y = 5300, size = 4, color = "grey35") +
+  annotate(
+    "text", label = paste0(p3_data_diff$diff[2]),
+    x = 1998.3, y = 11200, size = 4.8, color = "grey35") +
+  annotate(
+    "text", label = paste0(p3_data_diff$diff[3]),
+    x = 2012.8, y = 13200, size = 6.5, color = "grey35") +
+  annotate("text", label = paste(
+    "Since 2000, the number of\n",
+    "specialists trained per year\n",
+    "over primary care physicians\n", 
+    "has nearly doubled"),
+    hjust = 1,
+    x = 2014.3, 
+    y = 10200, 
+    color = "grey45",
+    lineheight = .9) +
+  ggsave("plots/p3_specialists.pdf", width = 9, height = 7)
+
+```
+
+
+
+
+

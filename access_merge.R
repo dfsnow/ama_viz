@@ -63,8 +63,8 @@ ama <- ama %>%
 ########################################
 
 # Load med school data for merging with AMA
-ama_med_schools <- read_csv("data/access_med_cleaned_2015_20180905.csv") %>% 
-  select(med_code, med_geoid, med_lon, med_lat, med_mcat_score) 
+ama_med_schools <- read_csv("data/access_med_cleaned_2015_20180905.csv") %>%
+  select(med_code, med_address, med_geoid, med_lon, med_lat, med_mcat_score) 
 
 # Load birth city data for merging with AMA
 ama_us_cities <- read_csv("data/access_birth_cleaned_2010_20180815.csv") %>%
