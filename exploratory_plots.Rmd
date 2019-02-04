@@ -13,10 +13,88 @@ library(lubridate)
 library(tidyverse)
 library(scales)
 library(ggrepel)
-library(viridis)
 library(tidycensus)
 library(sf)
+library(tigris)
+library(rmapshaper)
+library(gridExtra)
+library(extrafont)
+loadfonts()
 ```
+
+```{r theme, fig.align='center'}
+# Defining my custom AMA theme
+theme_ama <- function(
+  base_size = 12,
+  base_family = "Helvetica",
+  base_line_size = base_size / 170,
+  base_rect_size = base_size / 170) {
+  theme_bw(
+    base_size = base_size, 
+    base_family = base_family,
+    base_line_size = base_line_size,
+    base_rect_size = base_rect_size) %+replace%
+  theme(
+    panel.background = element_rect(fill = "white", color = NA),
+    panel.border = element_rect(fill = NA, color = "grey20"),
+    panel.grid = element_line(color = "grey85"),
+    panel.grid.minor = element_line(size = rel(0.5)), 
+    plot.title = element_text(
+      size = 18,
+      face = "bold",
+      color = "grey25",
+      hjust = 0,
+      margin = margin(b = 6)),
+    plot.subtitle = element_text(
+      size = 12,
+      color = "grey35",
+      margin = margin(b = 9),
+      hjust = 0),
+    plot.caption = element_text(
+      size = 12,
+      color = "grey35",
+      face = "italic",
+      margin = margin(t = 12),
+      hjust = 1),
+    axis.title = element_text(size = 14, face = "bold", color = "grey25"),
+    axis.title.x = element_text(margin = margin(t = 7)),
+    axis.title.y = element_text(margin = margin(r = 7), angle = 90),
+    axis.text = element_text(size = 12, color = "grey35"),
+    axis.text.y = element_text(margin = margin(r = 5)),
+    axis.text.x = element_text(margin = margin(t = 5)),
+    legend.key = element_rect(fill = "white", color = NA),
+    legend.title = element_text(color = "grey25", size = 14),
+    legend.text = element_text(
+      color = "grey35",
+      size = 13,
+      margin = margin(l = 3, r = 14)),
+    legend.background = element_blank(),
+    complete = TRUE
+  ) 
+}
+
+# AMA color palette
+ama_colors <- c('#2a044a', '#3f4d6b', '#6a8d8b', '#ecc9b6', '#fa8e8c', '#fe4365')
+ama_colors_10 <- c('#2a044a','#31325d','#44546f','#5b7781','#759c92',
+                   '#e7d5c0','#f2b6a8','#f99591','#fd717a','#fe4365')
+
+# Color palette plot
+ggplot() +
+  geom_tile(aes(x = 1:6, y = 1), fill = ama_colors) +
+  geom_text(
+    aes(x = 1:6, y = 1, label = ama_colors),
+    color = "white",
+    size = 5) +
+  scale_x_discrete(expand = c(0, 0)) + 
+  scale_y_discrete(expand= c(0, 0)) + 
+  labs(title = "AMA Color Palette") +
+  theme_ama() +
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_blank()
+  )
+```
+
 
 ```{r data_load, warning=FALSE, message=FALSE}
 # Load and clean all data
@@ -25,7 +103,7 @@ source("ama_filter.R")
 
 cbsa_pop <- read_csv("data/tract_qcbsa_2015.csv") %>%
   group_by(qcbsa) %>%
-  summarize(pop = sum(tract_pop, na.rm = T)) %>%
+  summarize(pop = sum(unique(cbsa_pop), na.rm = T)) %>%
   mutate(rural = between(`qcbsa`, 0, 2)) %>%
   group_by(rural) %>%
   summarize(pop = sum(pop))
@@ -50,68 +128,52 @@ ama_filtered %>%
       right = FALSE),
     rural = between(`geoid_qcbsa`, 0, 2)
     ) %>%
+  mutate(
+    age = replace(
+      age, age %in% c("100+", "95-99", "90-94", "85-89", "80-84"), "75-79")
+    ) %>%
   group_by(age, rural) %>%
   summarize(doc_count = n()) %>%
   filter(!is.na(rural)) %>%
   left_join(cbsa_pop, by = "rural") %>%
+  ungroup() %>%
   mutate(
     docs_per_100k = (doc_count / pop) * 1e5,
     docs_per_100k = ifelse(rural == "TRUE", docs_per_100k, -docs_per_100k),
-    rural = ifelse(rural == "TRUE", "Rural", "Urban")
+    rural = ifelse(rural == "TRUE", "Rural", "Urban"),
+    age = gsub("75-79", "75+", age)
     ) %>%
-  filter(!(age %in% c("100+", "95-99", "90-94", "85-89", "80-84", "20-24"))) %>%
-  ggplot() +
-    geom_bar(aes(x = age, y = docs_per_100k, fill = rural), stat = "identity") +
-    scale_y_continuous(
-      labels = abs,
-      limits = c(-45, 45),
-      breaks = seq(-40, 40, 10)
-      ) +
-    scale_fill_brewer(
-      name = "Type",
-      palette = "Set1",
-      breaks = c("Urban", "Rural")
-      ) +
-    coord_flip(clip = "off") +
-    theme_bw() +
-    labs(
-      title = "Rural Doctors Are Scarcer and Older",
-      subtitle = paste("Young doctors avoid moving to rural areas,",
-                       "leaving older doctors to pick up the slack"),
-      caption = "Source: American Medical Association Master File",
-      y = "Doctors Per 100K People",
-      x = "Doctor Age"
-    ) + 
-    theme(
-      plot.title = element_text(size = 16),
-      plot.subtitle = element_text(
-        color = "grey35",
-        margin = margin(b = 7),
-        size = 12),
-      plot.caption = element_text(color = "grey35"),
-      panel.grid.minor = element_blank(),
-      axis.title.x = element_text(margin = margin(t = 5)),
-      axis.title.y = element_text(margin = margin(r = 7)),
-      axis.title = element_text(size = 13),
-      axis.text = element_text(size = 11),
-      axis.text.y = element_text(margin = margin(r = 5)),
-      axis.text.x = element_text(margin = margin(t = 5)),
-      legend.justification = "top",
-      legend.position = c(0.87, .15),
-      legend.text = element_text(
-        color = "grey35",
-        size = 12,
-        margin = margin(l = 3, r = 14)),
-      legend.key.height = unit(1.13, "cm"),
-      legend.title = element_blank(),
-      legend.background = element_blank()
-      ) +
-    guides(fill = guide_legend(
-      override.aes = list(linetype = 0, size = 5), nrow = 1)) +
-    annotate(
-      "rect", ymin = 25, ymax = Inf,
-      xmin = 1.02, xmax = 1.98, fill = "white") + 
-    ggsave("plots/p1_pop_pyramid.pdf", width = 9, height = 7) 
+  filter(!(age %in% c("20-24"))) %>%
+ggplot() +
+  geom_bar(aes(x = age, y = docs_per_100k, fill = rural), stat = "identity") +
+  scale_y_continuous(
+    labels = abs,
+    limits = c(-45, 45),
+    breaks = seq(-40, 40, 10)
+    ) +
+  scale_fill_manual(
+    name = "Type",
+    values = c("Urban" = ama_colors[2], "Rural" = ama_colors[length(ama_colors)]),
+    breaks = c("Urban", "Rural")
+    ) +
+  coord_flip(clip = "off") +
+  labs(
+    title = "Rural Doctors Are Scarcer and Older",
+    subtitle = paste("Young doctors avoid moving to rural areas,",
+                     "leaving a shrinking group of older doctors",
+                     "to pick up the slack"),
+    caption = "Source: American Medical Association Master File",
+    y = "Doctors Per 100K People",
+    x = "Doctor Age"
+  ) + 
+  theme_ama() +
+  theme(legend.position = "none") +
+  annotate("text", label = "Urban", x = 11, y = -20,
+           size = 6, color = ama_colors[2], fontface = "bold") +
+  annotate("text", label = "Rural", x = 11, y = 13,
+           size = 6, color = ama_colors[length(ama_colors)],
+           fontface = "bold") +
+  ggsave("plots/p1_pop_pyramid.pdf", width = 9, height = 7) 
 ```
 
 Using birth CBSA as a starting point, this plot shows where different cohorts of physicians end up attending medical school, doing their residency, and practicing. Each line represents the cohort of physicians born in 1 of 10 CBSA deciles. Each shaded region represents a different level of rurality. The goal of this plot is to show that nearly all doctors end up practicing in urban and suburban areas, regardless of their place of birth.
@@ -135,88 +197,97 @@ ama_filtered %>%
   gather(key = period, value = rurality, -bcbsa) %>%
   mutate(period = replace(period, period == "birth_qcbsa", "t0")) %>%
 ggplot() +
-  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf,
-                ymax = 2.5), fill = "grey95", alpha = 0.05) +
-  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 2.5,
-                ymax = 4), fill = "white", alpha = 0.05) +
-  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 4,
-                ymax = 6), fill = "grey95", alpha = 0.05) +
-  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 6,
-                ymax = 8.25), fill = "white", alpha = 0.05) +
-  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 8.25,
-                ymax = Inf), fill = "grey95", alpha = 0.05) +
-  geom_line(aes(x = period, y = rurality,
-                color = bcbsa, group = bcbsa), size = 1.1) +
+  geom_rect(aes(
+    xmin = -Inf, xmax = Inf, ymin = -Inf,
+    ymax = 2.5), fill = "grey95", alpha = 0.05) +
+  geom_rect(aes(
+    xmin = -Inf, xmax = Inf, ymin = 2.5,
+    ymax = 4), fill = "white", alpha = 0.05) +
+  geom_rect(aes(
+    xmin = -Inf, xmax = Inf, ymin = 4,
+    ymax = 6), fill = "grey95", alpha = 0.05) +
+  geom_rect(aes(
+    xmin = -Inf, xmax = Inf, ymin = 6,
+    ymax = 8.25), fill = "white", alpha = 0.05) +
+  geom_rect(aes(
+    xmin = -Inf, xmax = Inf, ymin = 8.25,
+    ymax = Inf), fill = "grey95", alpha = 0.05) +
+  geom_line(aes(
+    x = period, y = rurality,
+    color = factor(bcbsa), group = bcbsa), size = 1.1) +
   geom_vline(xintercept = 1, linetype = "longdash", color = "grey45") +
+  scale_color_manual(values = rev(ama_colors_10)) +
   scale_x_discrete(
     labels = period_labels,
     expand = expand_scale(mult = c(0.2, 0.05))
     ) +
-  scale_color_viridis_c(end = 0.8, direction = -1) +
-  theme_bw() +
   labs(
-    title = "Regardless of Birthplace, Doctors Move to Urban Areas",
-    subtitle = paste("Ten cohorts of doctors, sorted by the rurality of their",
-                     "birthplace CBSA, end up in urban and suburban areas"),
+    title = "Doctors Move to Urban Areas Regardless of Birthplace",
+    subtitle = paste("Ten groups of doctors, sorted by the rurality of their",
+                     "birthplace, all end up in urban and suburban areas"),
     x = "Event / Period",
     caption = "Source: American Medical Association Master File"
   ) +
+  theme_ama() +
   theme(
-    plot.title = element_text(size = 16),
-    plot.subtitle = element_text(
-      color = "grey35",
-      margin = margin(b = 7),
-      size = 12),
-    plot.caption = element_text(color = "grey35"),
     axis.title.x = element_text(margin = margin(t = 8), size = 14),
-    axis.text = element_text(size = 11),
     axis.text.y.left = element_blank(),
     axis.ticks.y = element_blank(),
     panel.grid.major.x = element_line(color = "grey60"),
     panel.grid.major.y = element_blank(),
     panel.grid.minor = element_blank(),
     axis.title.y.left = element_blank(),
-    axis.text.y = element_text(margin = margin(r = 5)),
-    axis.text.x = element_text(size = 12, margin = margin(t = 5)),
     legend.position = "none"
   ) +
-  annotate("text", label = "Rural", x = 0.4, y = 1.5,
-           size = 7, color = "grey65", fontface = 2) +
-  annotate("text", label = "Small\nTown", x = 0.4, y = 3.25,
-           size = 7, color = "grey65", fontface = 2, lineheight = 0.9) +
-  annotate("text", label = "Sub-\nUrban", x = 0.4, y = 5,
-           size = 7, color = "grey65", fontface = 2, lineheight = 0.9) +
-  annotate("text", label = "Urban", x = 0.4, y = 7,
-           size = 7, color = "grey65", fontface = 2) +
-  annotate("text", label = "Urban\nCore", x = 0.4, y = 9.25,
-           size = 7, color = "grey65", fontface = 2, lineheight = 0.9) +
-  annotate("segment", x = 1.02, xend = 1.38,
-           y = 1, yend = 1.2, color = "grey45") +
-  annotate("text",
+  annotate(
+    "text", label = "Rural", x = 0.4, y = 1.5,
+    size = 7, color = "grey65", fontface = 2) +
+  annotate(
+    "text", label = "Small\nTown", x = 0.4, y = 3.25,
+    size = 7, color = "grey65", fontface = 2, lineheight = 0.9) +
+  annotate(
+    "text", label = "Sub-\nUrban", x = 0.4, y = 5,
+    size = 7, color = "grey65", fontface = 2, lineheight = 0.9) +
+  annotate(
+    "text", label = "Urban", x = 0.4, y = 7,
+    size = 7, color = "grey65", fontface = 2) +
+  annotate(
+    "text", label = "Urban\nCore", x = 0.4, y = 9.25,
+    size = 7, color = "grey65", fontface = 2, lineheight = 0.9) +
+  annotate(
+    "segment", x = 1.01, xend = 1.35,
+    y = 1, yend = 1.21, color = "grey45") +
+  annotate(
+    "text",
     label = paste0(
-      "These doctors represent the cohort born in the most rural\n",
-      "Core-based Statistical Area (CBSA), think rural Kansas"),
+      "This line represents the group of doctors born in the most rural\n",
+      "decile of Core-based Statistical Areas (CBSA), think rural Kansas"),
     x = 1.41, y = 1.45, color = "grey35", hjust = 0, lineheight = 0.9
     ) +
-  annotate("segment", x = 2.02, xend = 2.25,
-           y = 5.35, yend = 3.75, color = "grey45") +
-  annotate("text",
+  annotate(
+    "segment", x = 2.02, xend = 2.25,
+    y = 5.35, yend = 3.75, color = "grey45") +
+  annotate(
+    "text",
     label = paste0(
       "Almost all medical schools are in urban areas,\n",
       "so medical students are mechanically forced to move"),
     x = 2.28, y = 3.51, color = "grey35", hjust = 0, lineheight = 0.9
     ) + 
   annotate("segment", x = 3.02, xend = 3.15, y = 8, yend = 9, color = "grey45") +
-  annotate("text",
+  annotate(
+    "text",
     label = paste0(
       "After medical school, doctors disperse to more\n",
       "rural residency programs - doctors from rural areas\n",
       "select more rural programs than those from cities"),
     x = 3.17, y = 9.5, color = "grey35", hjust = 0, lineheight = 0.9
     ) +
-  annotate("segment", x = 4.02, xend = 4.21,
-           y = 7.355, yend = 7.9, color = "grey45") +
-  annotate("text",
+  annotate(
+    "segment", x = 4.02, xend = 4.21,
+    y = 7.355, yend = 7.9, color = "grey45") +
+  annotate(
+    "text",
     label = paste0(
       "Once doctors choose a practice\n",
       "location they tend to stay put"),
@@ -238,22 +309,27 @@ p5_map <- get_acs(
   geometry = TRUE,
   shift_geo = TRUE) 
 
+p5_map <- ms_simplify(input = as_Spatial(p5_map, TRUE)) %>%
+  st_as_sf()
+
 p5_data <- ama_filtered %>% 
-  filter(!is.na(fips_state)) %>%
-  group_by(fips_state) %>%
-  summarize(doc_count = n()) 
-  
+  filter(!is.na(geoid)) %>%
+  mutate(state = str_sub(geoid, 1, 2)) %>%
+  group_by(state) %>%
+  summarize(doc_count = n())
+
 p5_map %>%
   st_transform(2163) %>%
-  left_join(p5_data, by = c("GEOID" = "fips_state")) %>%
-  mutate(docs_per_100k = (doc_count / estimate) * 1e5) %>%
-  mutate(docs_ntile = ntile(docs_per_100k, 6)) %>%
-  filter(GEOID != "11") %>% 
+  left_join(p5_data, by = c("GEOID" = "state")) %>%
+  mutate(
+    docs_per_100k = (doc_count / estimate) * 1e5,
+    docs_ntile = ntile(docs_per_100k, 6)
+    ) %>%
 ggplot() +
-  geom_sf(aes(fill = factor(docs_ntile)), color = "white", size = 0.5) +
-  scale_fill_brewer(
+  geom_sf(aes(fill = factor(docs_ntile)), color = "white", size = 0.6) +
+  scale_fill_manual(
     name = "Sextiles of Docs\nPer 100K Pop.",
-    palette = "RdBu",
+    values = rev(ama_colors),
     labels = c("Relative\nShortage", rep("", 4), "Relative\nSurplus")
     ) +
   labs(
@@ -264,30 +340,25 @@ ggplot() +
     caption = "Source: American Medical Association Master File"
   ) +
   theme_void() +
+  theme_ama() +
   theme(
-    plot.title = element_text(size = 16, margin = margin(t = 10), hjust = .7),
+    panel.border = element_blank(),
+    axis.text = element_blank(),
+    plot.title = element_text(margin = margin(t = 10), hjust = .7),
     plot.subtitle = element_text(
-      color = "grey35",
       hjust = .7,
       margin = margin(t = 7, b = -35),
-      size = 12,
       lineheight = 0.95),
     plot.caption = element_text(
-      color = "grey35",
       hjust = 0.1,
       margin = margin(t = -20)),
     panel.grid.major = element_line(color = "transparent"),
     panel.grid.minor = element_blank(),
     legend.title = element_text(
-      color = "grey25",
-      size = 13,
       hjust = 1,
       margin = margin(l = -20, r = 8)),
-    legend.text = element_text(
-      color = "grey45",
-      size = 11,
-      margin = margin(r = 4)),
-    legend.position = c(0.99, .22),
+    legend.text = element_text(margin = margin(r = -3)),
+    legend.position = c(1.015, .22),
     legend.justification = "right"
   ) +
   guides(fill = guide_legend(label.position = "left", title.hjust = 1)) + 
@@ -314,8 +385,8 @@ p2_data <- ama_filtered %>%
   filter(!is.na(avg_score) & st_count >= 1000) 
 
 p2_data_labels <- p2_data %>%
-  filter(med_school_id %in% c("03519", "02701", "05101", "00514")) %>%
-  bind_cols(school_name = c( "UCLA", "Ole Miss", "NYU", "UVA"))
+  filter(med_school_id %in% c("03519", "02701", "05101")) %>% 
+  bind_cols(school_name = c("Ole Miss", "NYU", "UVA"))
 
 ggplot() +
   geom_point(
@@ -332,13 +403,13 @@ ggplot() +
     fullrange = T,
     se = F,
     size = 1.5,
-    color = "#e41a1c"
+    color = ama_colors[length(ama_colors)]
     ) +
   geom_text_repel(
     data = p2_data_labels,
     aes(x = prac_qcbsa, y = avg_score, label = school_name),
-    color = "grey25",
-    segment.color = "grey35",
+    color = "grey35",
+    segment.color = "grey45",
     nudge_y = -1.4,
     nudge_x = -0.1
   ) +
@@ -354,38 +425,32 @@ ggplot() +
     title = "Competitive Medical Schools Send Their Graduates to Urban Areas",
     subtitle = paste("The higher the average MCAT score of the school,", 
                      "the more likely its graduates are to practice in a city"),
-    x = "Average Graduate Practice Location",
+    x = "Average Rurality of Graduate Practice Location",
     y = "School MCAT Score",
     caption = "Source: American Medical Association Master File"
   ) +
-  theme_bw() +
+  theme_ama() +
   theme(
-    plot.title = element_text(size = 16),
-    plot.subtitle = element_text(
-      color = "grey35",
-      margin = margin(b = 7),
-      size = 12),
-    plot.caption = element_text(
-      color = "grey35",
-      margin = margin(t = 7)),
     panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    axis.title.x = element_text(margin = margin(t = 5)),
-    axis.title.y = element_text(margin = margin(r = 7)),
-    axis.title = element_text(size = 13),
-    axis.text = element_text(size = 11),
-    axis.ticks.x = element_blank(),
     panel.grid.minor = element_blank(),
-    axis.text.y = element_text(margin = margin(r = 5)),
-    axis.text.x = element_text(size = 12, margin = margin(t = 5)),
+    axis.ticks.x = element_blank(),
     legend.justification = "top",
-    legend.title = element_text(color = "grey25", size = 13),
-    legend.text = element_text(color = "grey45", size = 11),
     legend.position = c(.1, .98)
   ) +
   annotate(
     "rect", xmin = 3, xmax = 4.2,
     ymin = 513, ymax = Inf, fill = "white") +
+  annotate(
+    "segment", x = 7.31, xend = 7.48, y = 508, yend = 509, color = "grey45"
+  ) +
+  annotate(
+    "text", x = 7.51, y = 509, hjust = 0,
+    label = paste0("UCLA has a low average \n",
+                  "MCAT score of 508, yet \n",
+                  "most of its graduates \n",
+                  "live in very urban areas"),
+    lineheight = 0.9, color = "grey35"
+    ) +
   ggsave("plots/p2_points.pdf", width = 9, height = 7)
 ```
 
@@ -427,45 +492,39 @@ ggplot() +
     color = "grey30",
     linetype = "longdash"
     ) +
-  scale_color_brewer(palette = "Set1") +
-  scale_x_continuous(breaks = seq(1975, 2016, by = 5)) +
+  scale_color_manual(values = c(
+    ama_colors[length(ama_colors)],
+    ama_colors[2])
+    ) +
+  scale_x_continuous(
+    breaks = seq(1975, 2016, by = 5),
+    expand = c(0, 0)) +
   scale_y_continuous(
     breaks = seq(0, 20000, by = 4000), 
     labels = comma,
-    limits = c(0, 20000)
+    limits = c(0, 20000),
+    expand = c(0, 0)
     ) + 
   labs(
     title = "More Doctors Are Becoming Specialists",
     subtitle = paste("As tuition costs rise, lucrative specialities",
                      "are attracting more and more medical students"),
-    x = "Year of Training",
-    y = "Number of Doctors Trained Per Year",
+    x = "Year",
+    y = "Residency Program Graduates Per Year",
     caption = "Source: American Medical Association Master File"
   ) +
-  theme_bw() +
+  theme_ama() +
   theme(
-    plot.title = element_text(size = 16),
-    plot.subtitle = element_text(
-      color = "grey35",
-      margin = margin(b = 7),
-      size = 12),
-    plot.caption = element_text(color = "grey35"),
-    axis.title.x = element_text(margin = margin(t = 7)),
-    axis.title.y = element_text(margin = margin(r = 4)),
-    axis.title = element_text(size = 13),
-    axis.text = element_text(size = 11),
-    panel.grid.minor = element_blank(),
-    axis.text.y = element_text(margin = margin(r = 5)),
-    axis.text.x = element_text(size = 12, margin = margin(t = 5)),
-    legend.position = "none"
-  ) +
+    legend.position = "none",
+    axis.title.y = element_text(margin = margin(r = 6))) +
   guides(colour = guide_legend(nrow = 1)) +
   annotate(
     "text", label = "Specialists", x = 2012,
-    y = 18900, size = 5, color = "#377eb8") + 
+    y = 18900, size = 5, color = ama_colors[2], fontface = "bold") + 
   annotate(
     "text", label = "Primary Care", x = 2012,
-    y = 6500, size = 5, color = "#e41a1c") + 
+    y = 6500, size = 5, color = ama_colors[length(ama_colors)],
+    fontface = "bold") + 
   annotate(
     "text", label = paste0(p3_data_diff$diff[1]),
     x = 1978.5, y = 5300, size = 4, color = "grey35") +
@@ -475,21 +534,170 @@ ggplot() +
   annotate(
     "text", label = paste0(p3_data_diff$diff[3]),
     x = 2012.8, y = 13200, size = 6.5, color = "grey35") +
-  annotate("text", label = paste(
-    "Since 2000, the number of\n",
-    "specialists trained per year\n",
-    "over primary care physicians\n", 
-    "has nearly doubled"),
+  annotate(
+    "text", label = paste(
+      "Since 2000, the number of\n",
+      "specialists trained per year\n",
+      "over primary care physicians\n", 
+      "has nearly doubled"),
     hjust = 1,
     x = 2014.3, 
     y = 10200, 
-    color = "grey45",
+    color = "grey35",
     lineheight = .9) +
   ggsave("plots/p3_specialists.pdf", width = 9, height = 7)
 
 ```
 
+# Access
 
+This plot shows primary care accessibility for the United States as calculated by Jamie Saxon and myself earlier this year. Access is a function of time it takes to reach a doctor and the congestion at each provider. Rural areas and parts of the south tend to have the worst access, while the northeast has the best.
+
+```{r load_tracts, message=FALSE, eval=FALSE}
+# Plot of access scores for all counties, this code is to attempt to speed up
+# mapping using geom_sf, which is horribly slow
+states <- unique(fips_codes$state)[1:51]
+temp <- counties(states, cb = TRUE, year = 2010)
+temp_simplified <- rmapshaper::ms_simplify(input = temp, keep = 0.01) 
+temp_elided <- albersusa::points_elided(temp_simplified)
+
+# Code for eliding taken from the albersusa package
+ak_bb <- readRDS(system.file("extdata/alaska_bb.rda", package="albersusa"))
+ak_poly <- as(raster::extent(as.vector(t(ak_bb))), "SpatialPolygons") 
+sp::proj4string(ak_poly) <- "+proj=laea +lat_0=45 +lon_0=-100 +x_0=0 +y_0=0 +a=6370997 +b=6370997 +units=m +no_defs"
+ak_poly <- ak_poly %>% st_as_sf()
+
+hi_bb <- readRDS(system.file("extdata/hawaii_bb.rda", package="albersusa"))
+hi_poly <- as(raster::extent(as.vector(t(hi_bb))), "SpatialPolygons")
+sp::proj4string(hi_poly) <- "+proj=laea +lat_0=45 +lon_0=-100 +x_0=0 +y_0=0 +a=6370997 +b=6370997 +units=m +no_defs"
+hi_poly <- hi_poly %>% st_as_sf()
+
+# Transform and remove Alaska + Hawaii, then save
+temp_elided %>%
+  st_as_sf() %>%
+  st_transform(2163) %>%
+  mutate(
+    ak_int = lengths(st_intersects(., ak_poly)) > 0,
+    hi_int = lengths(st_intersects(., hi_poly)) > 0
+    ) %>% 
+  filter(!ak_int & !hi_int) %>%
+  write_rds("data/county_boundaries_simplified.rds")
+```
+
+```{r p6, message=FALSE, warning=FALSE, fig.width=9, fig.height=7, fig.align='center'}
+# Loading counties and access scores
+counties_gdf <- read_rds("data/county_boundaries_simplified.rds") %>%
+  mutate(GEOID = paste0(STATEFP, COUNTYFP))
+access_scores <- read_csv("data/access_tract_costs_2010_20180815.csv") %>%
+  mutate(
+    geoid = str_pad(geoid, 11, "left", pad = "0"),
+    county = str_sub(geoid, 1, 5)
+    ) %>%
+  group_by(county) %>%
+  summarize(agg_cost = weighted.mean(agg_cost, pop)) %>%
+  mutate(
+    agg_cost = case_when(
+      agg_cost > 3.5 ~ 3.5,
+      agg_cost < 1 ~ 1,
+      TRUE ~ agg_cost),
+    agg_bin = as.numeric(cut(agg_cost, 30, include.lowest = F, right = F)),
+    score_color = cut(agg_bin, 6, include.lowest = F, right = F)
+    )
+
+bin_labels <- c(
+  rep("", 3), "Very Low",
+  rep("", 4), "Low",
+  rep("", 4), "Fair",
+  rep("", 7), "Normal",
+  rep("", 5), "High",
+  rep("", 3))
+
+p6_access_hist <- access_scores %>%
+  group_by(agg_bin) %>%
+  summarise(
+    agg_bin_n = n(),
+    score_color = first(score_color)
+    ) %>%
+ggplot() +
+  geom_col(aes(
+    x = rev(factor(agg_bin)),
+    y = agg_bin_n,
+    fill = score_color),
+    width = 1
+    ) +
+  scale_x_discrete(
+    name = "Level of Primary Care Access",
+    labels = bin_labels,
+    na.translate = FALSE
+    ) +
+  scale_y_continuous(name = "# of Counties", expand = c(0, 0)) +
+  scale_fill_manual(values = ama_colors) +
+  theme_ama() +
+  theme(
+    plot.background = element_rect(fill = "transparent"),
+    panel.border = element_blank(),
+    panel.background = element_rect(fill = "transparent"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    legend.position = "none"
+  )
+
+p6_bb <- as.matrix(rbind(x = c(-100.9859113661,-78.664835992), y = c(20.1992555939,27.7593372776)))
+colnames(p6_bb) <- c("min", "max")
+p6_bb <- as(raster::extent(as.vector(t(p6_bb))), "SpatialPolygons")
+
+p6_bb <- p6_bb %>%
+  st_as_sf() %>%
+  st_set_crs(4326) %>%
+  st_transform(2163) %>%
+  st_coordinates()
+  
+# Creating a map of all counties
+counties_gdf %>%
+  left_join(access_scores, by = c("GEOID" = "county")) %>%
+ggplot() +
+  geom_sf(aes(fill = score_color, color = score_color), size = 0.02) +
+  labs(
+    title = "Rural Counties Have Poor Access to Primary Care",
+    subtitle = paste0(
+      "Patients in rural counties drive farther and wait longer ",
+      "to see a primary care physician than their urban counterparts"),
+    caption = "Source: American Medical Association Master File"
+  ) +
+  scale_fill_manual(
+    values = ama_colors,
+    na.value = "grey90"
+  ) +
+  theme_void() +
+  theme_ama() +
+  theme(
+    panel.border = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    plot.subtitle = element_text(margin = margin(b = -8)),
+    plot.caption = element_text(
+      hjust = 0.0,
+      margin = margin(t = -10)),
+    panel.grid.major = element_line(color = "transparent"),
+    panel.grid.minor = element_blank(),
+    legend.position = "none"
+  ) +
+  annotation_custom(
+    ggplotGrob(p6_access_hist),
+    xmin = p6_bb[1,1],
+    xmax = p6_bb[3,1],
+    ymin = p6_bb[1,2],
+    ymax = mean(c(p6_bb[2,2], p6_bb[3,2]))
+    ) +
+  guides(fill = guide_legend(label.position = "left", title.hjust = 1)) +
+  ggsave("plots/p6_access.png", width = 9, height = 7)
+
+```
 
 
 
