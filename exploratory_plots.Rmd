@@ -1,12 +1,32 @@
 ---
-title: 'The Coming Crisis: The Changing Demographics of Physicians in Rural America'
+title: "The Coming Crisis: The Changing Demographics of Physicians in Rural America"
 author: "Dan Snow"
-date: "1/28/2019"
+date: "02/07/2019"
 output: 
   html_document:
     code_folding: hide
-    theme: lumen
+    theme: flatly
 ---
+
+- Get census block group data for 2017
+- Simplify block group geometries
+- Load all AMA data as points
+- Spatially intersect AMA points with block groups
+- For each block group, calculate number of doctors per person
+- Merge this per capita measure back to each point
+- Transform and plot point ALPHA according to per capita measure
+- Plot point color according to density
+
+ORDER
+1. Pop Map
+2. Pop Difference
+3. State Map
+4. Access
+5. Pop Pyramid
+6. Doc Movement
+7. Schools
+8. Speciality
+9. ???
 
 ```{r setup, warning=FALSE, message=FALSE}
 library(lubridate)
@@ -17,10 +37,18 @@ library(tidycensus)
 library(sf)
 library(tigris)
 library(rmapshaper)
-library(gridExtra)
 library(extrafont)
 loadfonts()
 ```
+
+```{r data_load, message=FALSE, warning=FALSE}
+# Load and clean all data
+source("access_merge.R")
+source("ama_filter.R")
+```
+
+<details>
+  <summary>Show Theme</summary>
 
 ```{r theme, fig.align='center'}
 # Defining my custom AMA theme
@@ -74,7 +102,8 @@ theme_ama <- function(
 }
 
 # AMA color palette
-ama_colors <- c('#2a044a', '#3f4d6b', '#6a8d8b', '#ecc9b6', '#fa8e8c', '#fe4365')
+ama_colors <- c('#2a044a', '#3f4d6b', '#6a8d8b',
+                '#ecc9b6', '#fa8e8c', '#fe4365')
 ama_colors_10 <- c('#2a044a','#31325d','#44546f','#5b7781','#759c92',
                    '#e7d5c0','#f2b6a8','#f99591','#fd717a','#fe4365')
 
@@ -95,11 +124,436 @@ ggplot() +
   )
 ```
 
+</details>
 
-```{r data_load, warning=FALSE, message=FALSE}
-# Load and clean all data
-source("access_merge.R")
-source("ama_filter.R")
+# Population Map
+
+```{r pop_map_prep, message=FALSE, eval=FALSE}
+# This chunk does the following:
+# 1. Downloads block group geometry files using tigris
+# 2. Simplifies the geometry using mapshaper for quicker intersection
+# 2. Downloads block group populations
+# 4. Merges the population data onto the geometry and saves to RDS
+
+# Load state and county fips codes
+states <- unique(fips_codes$state_code)[1:51]
+counties <- counties(
+  state = states,
+  cb = TRUE,
+  resolution = "20m",
+  year = "2017",
+  class = "sf"
+)
+
+# Download all block group geometries using tigris
+bg_geo <- reduce(
+  map(states, function(x) block_groups(x, cb = TRUE, year = 2017)), 
+  rbind
+)
+
+# Simplify the geometry for faster plotting and intersection
+bg_geo_simplified <- rmapshaper::ms_simplify(input = bg_geo, keep = 0.01) 
+
+# Convert to sf and transform to CRS 4326, keep only GEOID and geometry
+bg_geo_simplified <- bg_geo_simplified %>%
+  st_as_sf() %>%
+  st_transform(4326) %>%
+  select(GEOID, ALAND)
+
+# Downlaod the population data for all block groups
+bg_pop <- map2_dfr(
+  .x = counties$STATEFP,
+  .y = counties$COUNTYFP,
+  ~ get_acs(
+    geography = "block group",
+    variables = "B01001_001",
+    state = .x,
+    county = .y
+  )
+)
+
+# Join geometry and pop data then save to RDS so we don't have to do this again
+bg_geo_simplified %>%
+  left_join(bg_pop, by = "GEOID") %>%
+  rename(geoid = GEOID, name = NAME, land_area = ALAND) %>%
+  write_rds("data/bg_boundaries_pop.rds")
+
+```
+
+```{r pop_map, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
+# This chunk does the following:
+# 1. Load the previously created block group data
+# 2. Grabs state geometries from the census, converts to 2163 (Albers)
+# 3. Joins block group data to the AMA file (Albers)
+# 4. Calculates the log doctor density per block group and converts to 2163
+# 5. Defines a bounding box around the NY area to use as a clipping mask
+# 6. Clips all the points from inside that bounding box into their own dataframe
+# 7. Defines a relief subplot of the NY area
+# 8. Creates a whole US main population plot using the location of all doctors
+# 9. Saves the plot
+
+# Load the previously created block group data
+pop_map_bg_geo <- read_rds("data/bg_boundaries_pop.rds") %>%
+  select(geoid, estimate, land_area) %>%
+  rename(bg_geoid = geoid, bg_population = estimate) %>%
+  mutate(bg_land_area = udunits2::ud.convert(land_area, "m2", "km2")) %>%
+  select(-land_area) %>%
+  mutate(bg_log_pop = log(bg_population / bg_land_area))
+
+# Grabbing the state boundaries from the census
+pop_map_states <- get_acs(
+  geography = "state",
+  variables = c(pop = "B01001_001"),
+  geometry = TRUE,
+  shift_geo = TRUE) %>%
+  st_transform(2163)
+
+# Joins block group level data to the AMA data
+pop_map_ama_temp <- ama_filtered %>%
+  filter(!is.na(lon) & !is.na(lat) & lon >= -140 & lat >= 20) %>%
+  filter(!(fips_state %in% c("02", "15", "72"))) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_join(pop_map_bg_geo, join = st_within)
+
+# Get the doctor count per block group, then merge this data back to the AMA
+# file and convert the AMA points to 2163 Albers
+pop_map_ama_locs <- pop_map_ama_temp %>%
+  left_join(
+    pop_map_ama_temp %>%
+      st_set_geometry(NULL) %>%
+      group_by(bg_geoid) %>%
+      summarize(bg_doc_pop = n()),
+    by = "bg_geoid") %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(2163) %>%
+  mutate(
+    lon = st_coordinates(geometry)[,1],
+    lat = st_coordinates(geometry)[,2]
+    ) %>%
+  mutate(bg_log_doc = log(bg_doc_pop / bg_land_area))
+
+# Defining a lat/lon bounding box around the NY region
+pop_map_ny_bb <- tibble(
+    lon = c(-76.2956648209, -68.0484737666),
+    lat = c(39.5472027555, 43.0655158964)
+    ) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(2163) %>%
+  mutate(
+    lon = st_coordinates(geometry)[,1],
+    lat = st_coordinates(geometry)[,2]
+  ) 
+
+# Clipping the points from the NY region to place them in a relief
+pop_map_ny_bb_points <- pop_map_ama_locs %>%
+  filter(
+    lon >= pop_map_ny_bb$lon[1] & lon <= pop_map_ny_bb$lon[2],
+    lat >= pop_map_ny_bb$lat[1] & lat <= pop_map_ny_bb$lat[2]
+  ) 
+
+# Define another bounding box to contain the relief map
+pop_map_ny_relief_bb <- tibble(
+    lon = c(-75.0158710035, -51.0086998844),
+    lat = c(17.0223213429, 37.0647098435)
+    ) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(2163) %>%
+  mutate(
+    lon = st_coordinates(geometry)[,1],
+    lat = st_coordinates(geometry)[,2]
+  ) 
+
+pop_map_breaks <- pop_map_ama_locs %>%
+  filter(!is.infinite(bg_log_doc) & !is.na(bg_log_doc)) %>%
+  pull(bg_log_doc) %>%
+  BAMMtools::getJenksBreaks(., 6, 10000)
+
+# Defines the relief plot to be placed on the main plot
+pop_map_ny_relief_plot <- pop_map_ny_bb_points %>%
+ggplot() +
+  geom_sf(
+    data = pop_map_states %>%
+    filter(!(GEOID %in% c("02", "15"))),
+      fill = "grey85",
+      color = "grey60"
+    ) +
+  geom_point(aes(
+    x = lon,
+    y = lat,
+    color = bg_log_doc),
+    alpha = 0.5,
+    size = 0.1
+    ) +
+  scale_x_continuous(
+    limits = c(pop_map_ny_bb$lon[1], pop_map_ny_bb$lon[2]),
+    expand = c(0,0)
+    ) +
+  scale_y_continuous(
+    limits = c(pop_map_ny_bb$lat[1], pop_map_ny_bb$lat[2]),
+    expand = c(0,0)
+    ) +
+  scale_color_gradientn(
+    colors = rev(ama_colors),
+    breaks = pop_map_breaks
+    ) +
+  theme_ama() +
+  theme_void() +
+  theme(
+    panel.border = element_rect(color = "grey20", fill = "transparent", size = 2),
+    panel.grid.major = element_line(color = "transparent"),
+    legend.position = "none"
+  )
+
+# Defining the whole country plot with relief map
+pop_map_final <- pop_map_ama_locs %>%
+ggplot() +
+  geom_sf(
+    data = pop_map_states %>%
+    filter(!(GEOID %in% c("02", "15"))),
+      fill = "grey85",
+      color = "grey60"
+    ) +
+  geom_point(aes(
+    x = lon,
+    y = lat,
+    color = bg_log_doc),
+    alpha = 0.5,
+    size = 0.1
+    ) +
+  geom_rect(
+    xmin = pop_map_ny_bb$lon[1],
+    xmax = pop_map_ny_bb$lon[2],
+    ymin = pop_map_ny_bb$lat[1],
+    ymax = pop_map_ny_bb$lat[2],
+    fill = NA,
+    color = "grey20"
+    ) +
+  annotate(
+    "segment",
+    x = pop_map_ny_bb$lon[1],
+    xend = pop_map_ny_relief_bb$lon[1],
+    y = pop_map_ny_bb$lat[1],
+    yend = mean(c(
+      pop_map_ny_relief_bb$lat[1],
+      mean(c(pop_map_ny_relief_bb$lat[1], pop_map_ny_relief_bb$lat[2])))),
+    linetype = "dashed",
+    color = "grey35"
+    ) +
+  annotate(
+    "segment",
+    x = pop_map_ny_bb$lon[2],
+    xend = pop_map_ny_relief_bb$lon[2],
+    y = pop_map_ny_bb$lat[2],
+    yend = mean(c(
+      pop_map_ny_relief_bb$lat[2],
+      mean(c(pop_map_ny_relief_bb$lat[2], pop_map_ny_relief_bb$lat[1])))),
+    linetype = "dashed",
+    color = "grey35"
+    ) +
+  annotation_custom(
+    ggplotGrob(pop_map_ny_relief_plot),
+    xmin = pop_map_ny_relief_bb$lon[1],
+    xmax = pop_map_ny_relief_bb$lon[2],
+    ymin = pop_map_ny_relief_bb$lat[1],
+    ymax = pop_map_ny_relief_bb$lat[2]
+    ) +
+  scale_color_gradientn(
+    colors = rev(ama_colors),
+    breaks = pop_map_breaks
+    ) +
+  labs(
+    title = "Doctors Live Where People Live, Densely Packed Into Cities",
+    subtitle = paste(
+      "American doctors overwhelmingly congregate in the Northeast,\n",
+      "           especially around New York City, Boston, and D.C."),
+    caption = "Source: American Medical Association Master File"
+    ) +
+  theme_void() +
+  theme_ama() +
+  theme(
+    panel.grid.major = element_line(color = "transparent"),
+    panel.border = element_blank(),
+    plot.title = element_text(margin = margin(t = 10), hjust = .2),
+    plot.subtitle = element_text(
+      hjust = .25,
+      margin = margin(t = 7, b = -20),
+      lineheight = 0.95),
+    plot.caption = element_text(
+      hjust = 0.9,
+      margin = margin(t = -10, b = 10)),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    plot.margin = margin(r = 5),
+    legend.position = "none"
+  )
+
+# Saving to file
+ggsave("plots/p1_pop_map.png", pop_map_final, width = 9, height = 5)
+```
+
+```{r pop_map_diff, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
+# This chunk does the following:
+# 1. Reads in the block group data created in the prep chunk
+
+pop_diff_ama_locs <- pop_map_ama_locs %>%
+  mutate(bg_log_doc = log(bg_doc_pop / bg_land_area)) %>%
+  filter(!is.na(bg_log_doc) & !is.infinite(bg_log_doc)) %>%
+  mutate(bg_log_pop = log(bg_population / bg_land_area)) %>%
+  filter(!is.na(bg_log_pop) & !is.infinite(bg_log_pop))
+
+pop_diff_ama_locs <- pop_map_ama_locs %>%
+  mutate(bg_log_doc = log(bg_doc_pop / bg_land_area)) %>%
+  filter(!is.na(bg_log_doc) & !is.infinite(bg_log_doc)) %>%
+  mutate(bg_log_pop = log(bg_population / bg_land_area)) %>%
+  filter(!is.na(bg_log_pop) & !is.infinite(bg_log_pop)) %>%
+  mutate(
+    bg_log_doc_ntile = ntile(bg_log_doc, 20),
+    bg_log_pop_ntile = ntile(bg_log_pop, 20),
+    bg_diff = bg_log_doc_ntile - bg_log_pop_ntile
+    ) %>%
+  filter(!is.na(bg_diff) & !is.infinite(bg_diff) & bg_diff > -1)
+
+# Clipping the points from the NY region to place them in a relief
+pop_diff_ny_bb_points <- pop_diff_ama_locs %>%
+  filter(
+    lon >= pop_map_ny_bb$lon[1] & lon <= pop_map_ny_bb$lon[2],
+    lat >= pop_map_ny_bb$lat[1] & lat <= pop_map_ny_bb$lat[2]
+  ) 
+
+# Defines the relief plot to be placed on the main plot
+pop_diff_ny_relief_plot <- pop_diff_ny_bb_points %>%
+ggplot() +
+  geom_sf(
+    data = pop_map_states %>%
+    filter(!(GEOID %in% c("02", "15"))),
+      fill = "grey85",
+      color = "grey60"
+    ) +
+  geom_point(aes(
+    x = lon,
+    y = lat,
+    color = bg_log_doc),
+    alpha = 0.5,
+    size = 0.1
+    ) +
+  scale_x_continuous(
+    limits = c(pop_map_ny_bb$lon[1], pop_map_ny_bb$lon[2]),
+    expand = c(0,0)
+    ) +
+  scale_y_continuous(
+    limits = c(pop_map_ny_bb$lat[1], pop_map_ny_bb$lat[2]),
+    expand = c(0,0)
+    ) +
+  scale_color_gradientn(
+    colors = rev(ama_colors),
+    breaks = pop_map_breaks
+    ) +
+  scale_alpha_continuous(range = c(0, 1)) +
+  theme_ama() +
+  theme_void() +
+  theme(
+    panel.border = element_rect(
+      color = "grey20",
+      fill = "transparent",
+      size = 2),
+    panel.grid.major = element_line(color = "transparent"),
+    legend.position = "none"
+  )
+
+# Defining the whole country plot with relief map
+pop_diff_final <- pop_diff_ama_locs %>%
+ggplot() +
+  geom_sf(
+    data = pop_map_states %>%
+    filter(!(GEOID %in% c("02", "15"))),
+      fill = "grey85",
+      color = "grey60"
+    ) +
+  geom_point(aes(
+    x = lon,
+    y = lat,
+    color = bg_log_doc),
+    alpha = 0.5,
+    size = 0.1
+    ) +
+  geom_rect(
+    xmin = pop_map_ny_bb$lon[1],
+    xmax = pop_map_ny_bb$lon[2],
+    ymin = pop_map_ny_bb$lat[1],
+    ymax = pop_map_ny_bb$lat[2],
+    fill = NA,
+    color = "grey20"
+    ) +
+  annotate(
+    "segment",
+    x = pop_map_ny_bb$lon[1],
+    xend = pop_map_ny_relief_bb$lon[1],
+    y = pop_map_ny_bb$lat[1],
+    yend = mean(c(
+      pop_map_ny_relief_bb$lat[1],
+      mean(c(pop_map_ny_relief_bb$lat[1], pop_map_ny_relief_bb$lat[2])))),
+    linetype = "dashed",
+    color = "grey35"
+    ) +
+  annotate(
+    "segment",
+    x = pop_map_ny_bb$lon[2],
+    xend = pop_map_ny_relief_bb$lon[2],
+    y = pop_map_ny_bb$lat[2],
+    yend = mean(c(
+      pop_map_ny_relief_bb$lat[2],
+      mean(c(pop_map_ny_relief_bb$lat[2], pop_map_ny_relief_bb$lat[1])))),
+    linetype = "dashed",
+    color = "grey35"
+    ) +
+  annotation_custom(
+    ggplotGrob(pop_diff_ny_relief_plot),
+    xmin = pop_map_ny_relief_bb$lon[1],
+    xmax = pop_map_ny_relief_bb$lon[2],
+    ymin = pop_map_ny_relief_bb$lat[1],
+    ymax = pop_map_ny_relief_bb$lat[2]
+    ) +
+  scale_color_gradientn(
+    colors = rev(ama_colors),
+    breaks = pop_map_breaks
+    ) +
+  scale_alpha_continuous(range = c(0, 1)) +
+  labs(
+    title = "Doctors Live Where People Live, Densely Packed Into Cities",
+    subtitle = paste(
+      "American doctors overwhelmingly congregate in the Northeast,\n",
+      "           especially around New York City, Boston, and D.C."),
+    caption = "Source: American Medical Association Master File"
+    ) +
+  theme_void() +
+  theme_ama() +
+  theme(
+    panel.grid.major = element_line(color = "transparent"),
+    panel.border = element_blank(),
+    plot.title = element_text(margin = margin(t = 10), hjust = .2),
+    plot.subtitle = element_text(
+      hjust = .25,
+      margin = margin(t = 7, b = -20),
+      lineheight = 0.95),
+    plot.caption = element_text(
+      hjust = 0.9,
+      margin = margin(t = -10, b = 10)),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    plot.margin = margin(r = 5),
+    legend.position = "none"
+  )
+
+ggsave("plots/p2_pop_diff.png", pop_diff_final, width = 9, height = 5)
+
+```
+
+# Rurality
+
+```{r pop_pyramid, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
+
 
 cbsa_pop <- read_csv("data/tract_qcbsa_2015.csv") %>%
   group_by(qcbsa) %>%
@@ -107,14 +561,8 @@ cbsa_pop <- read_csv("data/tract_qcbsa_2015.csv") %>%
   mutate(rural = between(`qcbsa`, 0, 2)) %>%
   group_by(rural) %>%
   summarize(pop = sum(pop))
-```
 
-# Rurality
-
-Rural American doctors are getting older. This plot shows the distribution of all U.S. physicians by age and rurality of practice. Rurality is determined by geocoding each physician's address, spatially intersecting it with a core-based statistical area (CBSAs), and then ranking all the CBSAs by overall population decile. The lowest two deciles are considered rural. The goal of this plot is to show the difference in age distribution between rural and urban physicians. Most of the mass of the urban physician distribution is around 40 years old, while most of the mass for rural physicians is around 60. 
-
-```{r p1, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
-# Plot 1: Population Pyramid
+# Population Pyramid
 ama_filtered %>%
   mutate(
     age = cut(
@@ -553,11 +1001,11 @@ ggplot() +
 
 This plot shows primary care accessibility for the United States as calculated by Jamie Saxon and myself earlier this year. Access is a function of time it takes to reach a doctor and the congestion at each provider. Rural areas and parts of the south tend to have the worst access, while the northeast has the best.
 
-```{r load_tracts, message=FALSE, eval=FALSE}
+```{r load_counties, message=FALSE, eval=FALSE}
 # Plot of access scores for all counties, this code is to attempt to speed up
 # mapping using geom_sf, which is horribly slow
 states <- unique(fips_codes$state)[1:51]
-temp <- counties(states, cb = TRUE, year = 2010)
+temp <- counties(states, cb = TRUE, year = 2017)
 temp_simplified <- rmapshaper::ms_simplify(input = temp, keep = 0.01) 
 temp_elided <- albersusa::points_elided(temp_simplified)
 
@@ -698,6 +1146,4 @@ ggplot() +
   ggsave("plots/p6_access.png", width = 9, height = 7)
 
 ```
-
-
 
