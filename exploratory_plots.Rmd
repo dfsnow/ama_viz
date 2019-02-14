@@ -5,7 +5,7 @@ date: "02/07/2019"
 output: 
   html_document:
     code_folding: hide
-    theme: flatly
+    theme: sandstone
 ---
 
 ```{r setup, warning=FALSE, message=FALSE}
@@ -707,6 +707,129 @@ ggplot() +
   ggsave("plots/p4_pop_pyramid.pdf", width = 9, height = 7) 
 ```
 
+# Wages
+
+```{r wages, message=FALSE, fig.width=9, fig.height=6, fig.align='center'}
+# This chunk does the following:
+# 1. Loads in a previously created subsample of doctor data from IPUMS
+# 2. Bins wages into quartiles by year and urban code
+# 3. Creates a modified line plot using the quartile range and rural/urban code
+
+# Keep only these years from the IPUMS data (other years have no METRO code)
+wages_years <- c(1960, 1980, 2000, 2010, 2015) 
+
+# Reading in and filtering previously made IPUMS doctor data
+wages_data <- read_dta("data/acs_pers_phys.dta") %>%
+  mutate(metro = as.numeric(metro)) %>%
+  filter(
+    (educd >= 114 | year < 2000),              # Edu code changed prior to 2000
+    empstat == 1,                              # Must be employed
+    age >= 25,                                 # Only docs over 28 are real
+    year %in% wages_years                      # Only use years with METRO data
+    ) %>%
+  mutate(
+    ur = ifelse(metro %in% c(2, 3, 4), "Urban", "Rural"),
+    sex = ifelse(sex == 1, "Male", "Female")
+    ) %>%
+  mutate_at(vars(year, age, perwt), funs(as.numeric))
+
+# Aggregate the data and plot
+wages_data %>%
+  mutate(income = inctot_cpi99 * 1.5) %>% 
+  group_by(year, ur) %>%
+  summarise(
+    lower = wtd.quantile(income, 0.25, weight = perwt),
+    middle = wtd.quantile(income, 0.5, weight = perwt),
+    upper = wtd.quantile(income, 0.75, weight = perwt)
+  ) %>%
+  mutate(ur = factor(ur, levels = c("Rural", "Urban"))) %>%
+ggplot(aes(x = factor(year), color = ur, group = ur)) +
+  geom_point(
+    aes(y = middle),
+    position = position_dodge(width = 0.2),
+    size = 4
+  ) +
+  geom_linerange(
+    aes(ymin = lower, ymax = upper),
+    position = position_dodge(width = 0.2),
+    alpha = 0.6, linetype = "dashed"
+  ) +
+  geom_line(
+    aes(y = middle),
+    position = position_dodge(width = 0.2),
+    size = 1.1
+  ) +
+  scale_color_manual(
+    values = c(
+      "Rural" = ama_colors[length(ama_colors)],
+      "Urban" = ama_colors[2]
+    )
+  ) +
+  scale_y_continuous(
+    # limits = c(70000, 400000),
+    expand = c(0.01, 0.05),
+    label = function(l) {trans = l / 1000; paste0("$", trans, "K")},
+    oob = function(x, ...) x
+  ) +
+  scale_x_discrete(expand = c(0.05, 0.05)) +
+  labs(
+    title = "Rural Doctors Make More Money Than Urban Doctors",
+    subtitle = paste("Since 2000, the pay gap between rural and urban doctors",
+                     "has increased significantly"),
+    caption = "Source: IPUMS-USA, University of Minnesota",
+    x = "Year",
+    y = "Median Income (In 2017 USD)"
+  ) +
+  annotate(
+    "text", x = 4.68, y = 386000,
+    label = paste("In 2015, the median rural doctor made",
+                  "\n $41K more than the median urban one"),
+    vjust = 0, hjust = 1, color = "grey35"
+  ) +
+    annotate(
+    "text", x = 4.68, y = 386000,
+    label = paste("In 2015, the median rural doctor made",
+                  "\n $41K more than the median urban one"),
+    vjust = 0, hjust = 1, color = "grey35"
+  ) +
+  annotate(
+    "segment", x = 4.93, xend = 4.7,
+    y = 240000, yend = 375000, color = "grey45"
+  ) +
+  annotate(
+    "text", x = 1.3, y = 170000, label = "Rural",
+    color = ama_colors[length(ama_colors)], size = 6, fontface = "bold"
+  ) +
+  annotate(
+    "text", x = 1.65, y = 115000, label = "Urban",
+    color = ama_colors[2], size = 6, fontface = "bold"
+  ) +
+  annotate(
+    "segment", x = 2.91, xend = 2.5,
+    y = 310000, yend = 325000, color = "grey45"
+  ) +
+  annotate(
+    "text", x = 2.46, y = 328000,
+    label = paste("Dotted lines represent the interquartile",
+                  "\nrange of income. Since 2000, this range",
+                  "\nhas exploded, with the top quartile of",
+                  "\ndoctors making more than $400K per year"),
+    vjust = 0.245, hjust = 1, color = "grey35"
+  ) +
+  theme_ama() +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 13),
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_text(margin = margin(t = 10), size = 16),
+    axis.title.y = element_text(margin = margin(r = 12), size = 16),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) +
+  ggsave("plots/p5_wages.pdf", width = 9, height = 6)
+
+```
+
 # Rurality
 
 Using birth CBSA as a starting point, this plot shows where different cohorts of physicians end up attending medical school, doing their residency, and practicing. Each line represents the cohort of physicians born in 1 of 10 CBSA deciles. Each shaded region represents a different level of rurality. The goal of this plot is to show that nearly all doctors end up practicing in urban and suburban areas, regardless of their place of birth.
@@ -834,9 +957,10 @@ ggplot() +
       "location they tend to stay put"),
     x = 4.25, y = 7.85, color = "grey35", hjust = 0, lineheight = 0.9
     ) +
-  ggsave("plots/p5_doc_movement.pdf", width = 9, height = 7)
+  ggsave("plots/p6_doc_movement.pdf", width = 9, height = 7)
 
 ```
+
 
 # Schools
 
@@ -932,9 +1056,10 @@ ggplot() +
                   "live in very urban areas"),
     lineheight = 0.9, color = "grey35"
     ) +
-  ggsave("plots/p6_med_schools.pdf", width = 9, height = 7)
+  ggsave("plots/p7_med_schools.pdf", width = 9, height = 7)
 
 ```
+
 
 # Specialties
 
@@ -1036,64 +1161,23 @@ ggplot() +
     y = 10200, 
     color = "grey35",
     lineheight = .9) +
-  ggsave("plots/p7_specialists.pdf", width = 9, height = 7)
-
-```
-
-# Genders
-
-```{r gender, message=FALSE, fig.width=9, fig.height=5, fig.align='center'}
-gender_years <- c(1960, 1980, 2000, 2010, 2015) 
-
-# Reading in and filtering IPUMS doctor data
-gender_data <- read_dta("data/acs_pers_phys.dta") %>%
-  mutate(metro = as.numeric(metro)) %>%
-  filter(
-    (educd >= 114 | year < 2000),              # Edu code changed prior to 2000
-    empstat == 1,                              # Must be employed
-    age >= 28,                                 # Only docs over 28 are real
-    year %in% gender_years                     # Only use years with METRO data
-    ) %>%
-  mutate(
-    ur = ifelse(metro %in% c(2, 3, 4), "Urban", "Rural"),
-    sex = ifelse(sex == 1, "Male", "Female")
-    ) %>%
-  mutate_at(vars(year, age, perwt), funs(as.numeric))
-
-
-gender_data %>%
-  group_by(year, sex, ur) %>%
-  summarize(
-    income = wtd.quantile(inctot_cpi99, 0.5, weight = perwt) * 1.5,
-    age = weighted.mean(uhrswork, perwt)
-    ) %>%
-  mutate(ur_sex = paste(ur, sex)) %>%
-ggplot() +
-  geom_line(aes(x = year, y = income, color = ur_sex, linetype = ur_sex)) +
-  scale_linetype_manual(
-    values = c(
-      "Rural Female" = "dashed",
-      "Urban Female" = "solid",
-      "Rural Male" = "dashed",
-      "Urban Male" = "solid"
-    )
-  ) +
-  scale_color_manual(
-    values = c(
-      "Rural Female" = ama_colors[length(ama_colors)],
-      "Urban Female" = ama_colors[length(ama_colors)],
-      "Rural Male" = ama_colors[2],
-      "Urban Male" = ama_colors[2]
-    )
-  ) +
-  theme_ama() +
-  theme()
+  ggsave("plots/p8_specialists.pdf", width = 9, height = 7)
 
 ```
 
 # Nurses
 
-```{r nurses, message=FALSE, eval=FALSE, fig.width=9, fig.height=8, fig.align='center'}
+```{r nurses, message=FALSE, fig.width=9, fig.height=8, fig.align='center'}
+# This chunk does the following:
+# 1. Loads Kaiser Family Foundation data on the number of nurses per state
+# 2. Joins KFF data to previously made data on the number of docs per state
+# 3. Determines the rank of all states in terms of nurse/doc pop per 100k
+# 4. Creates an indicator for the top decile of rank changes
+# 5. Creates a rank-change subplot for docs vs nurse practitioners
+# 6. Creates a rank-change subplot for docs vs registered nurses
+# 7. Combines both plots with grid.arrange and adds title, subtitle, etc
+
+# Load in nurse data from the Kaiser Family Foundation and merge doc data
 nurses_data <- read_csv("data/kff_states_raw_data.csv") %>%
   left_join(
     fips_codes %>% distinct(state_name, state_code, state),
@@ -1103,6 +1187,7 @@ nurses_data <- read_csv("data/kff_states_raw_data.csv") %>%
   select(state, state_code, np_total, pa_total, rn_total) %>%
   left_join(state_data, by = c("state_code" = "state"))
 
+# Determine the rank of each state in terms of nurses/docs per 100k population
 nurses_rank <- left_join(
   state_map,
   nurses_data,
@@ -1114,18 +1199,19 @@ nurses_rank <- left_join(
   ) %>%
   select(-NAME, -variable, -moe) %>%
   st_set_geometry(NULL) %>%
+  filter(state != "HI") %>%
   mutate_at(
     vars(np_total:doc_count),
     funs(rank((. / state_pop) * 1e5))
   ) %>%
   mutate(
-    doc_np_rank_diff = abs(doc_count - np_total) > quantile(abs(doc_count - np_total), .85),
-    doc_pa_rank_diff = abs(doc_count - pa_total) > quantile(abs(doc_count - pa_total), .85),
-    doc_rn_rank_diff = abs(doc_count - rn_total) > quantile(abs(doc_count - rn_total), .85)
+    doc_np_rank_diff = abs(doc_count - np_total) > quantile(abs(doc_count - np_total), .9),
+    doc_pa_rank_diff = abs(doc_count - pa_total) > quantile(abs(doc_count - pa_total), .9),
+    doc_rn_rank_diff = abs(doc_count - rn_total) > quantile(abs(doc_count - rn_total), .9)
   ) %>%
   gather(type, rank, np_total:doc_count) 
 
-
+# Create a plot of state rank, docs per 100k vs NPs per 100k
 nurses_plot1 <- ggplot() +
   geom_line(
     data = nurses_rank %>%
@@ -1181,28 +1267,39 @@ nurses_plot1 <- ggplot() +
   ) +
   scale_x_discrete(expand = c(0, 0)) +
   scale_y_continuous(expand = c(0, 0)) +
-  scale_color_manual(values = c(
-    "TRUE" = ama_colors[length(ama_colors)],
-    "FALSE" = "grey90")
+  scale_color_manual(
+    name = "",
+    values = c(
+      "TRUE" = ama_colors[length(ama_colors)],
+      "FALSE" = "transparent"),
+    labels = c(
+      "TRUE" = "Top Decile of Rank Changes",
+      "FALSE" = ""),
+    guide = guide_legend(override.aes = list(
+      color = c(NA, ama_colors[length(ama_colors)]),
+      size = 8))
   ) +
   coord_cartesian(clip = "off") +
   labs(
     y = "State Rank (In Doctors/Nurses Per 100k Pop.)",
-    x = "Doctors  VS  Nurse Practitioners"
+    x = "Doctors        VS         Nurse Practitioners"
   ) +
   theme_ama() +
   theme(
-    legend.position = "none",
+    legend.position = c(0.5, -0.09),
+    legend.margin = margin(0, 0, 0, 0),
+    legend.key = element_blank(),
     plot.margin = margin(l = 0.5, r = 1.5, t = 1, unit = "lines"),
     panel.border = element_blank(),
     panel.grid = element_blank(),
-    axis.title.x = element_text(margin = margin(t = 4)),
+    axis.title.x = element_text(margin = margin(t = 12)),
     axis.title.y = element_text(margin = margin(r = 35), size = 18),
     axis.line.y = element_blank(),
     axis.text = element_blank(),
     axis.ticks = element_blank() 
-  )
+  ) 
 
+# Create a plot of state rank, docs per 100k vs RNs per 100k
 nurses_plot2 <- ggplot() +
   geom_line(
     data = nurses_rank %>%
@@ -1260,12 +1357,12 @@ nurses_plot2 <- ggplot() +
   scale_y_continuous(expand = c(0, 0)) +
   scale_color_manual(values = c(
     "TRUE" = ama_colors[length(ama_colors)],
-    "FALSE" = "grey90")
+    "FALSE" = "transparent")
   ) +
   coord_cartesian(clip = "off") +
   labs(
     y = "State Rank (In Doctors/Nurses Per 100k Pop.)",
-    x = "Doctors  VS  Registered Nurses"
+    x = "Doctors          VS          Registered Nurses"
   ) +
   theme_ama() +
   theme(
@@ -1275,15 +1372,16 @@ nurses_plot2 <- ggplot() +
     plot.margin = margin(l = 3.3, r = 2, t = 1, unit = "lines"),
     panel.border = element_blank(),
     panel.grid = element_blank(),
-    axis.title.x = element_text(margin = margin(t = 4)),
+    axis.title.x = element_text(margin = margin(t = 12)),
     axis.title.y = element_blank(),
     axis.line.y = element_blank(),
     axis.text = element_blank(),
     axis.ticks = element_blank() 
   ) 
 
+# Create a title grob to arrange with gtable
 nurses_grob_tt <- textGrob(
-    "Nurses Serve as Substitutes in Areas with Few Doctors",
+    "Nurses Serve as Substitutes in States with Fewer Doctors",
     gp = gpar(
       fontsize = 18,
       fontfamily = "Helvetica",
@@ -1292,6 +1390,7 @@ nurses_grob_tt <- textGrob(
     hjust = 0,
     x = 0.07)
 
+# Create a subtitle grob
 nurses_grob_st <- textGrob(
     paste("States with the lowest number of doctors per 100K people",
           "have the highest number of nurses, and visa versa"),
@@ -1302,6 +1401,7 @@ nurses_grob_st <- textGrob(
     hjust = 0,
     x = 0.07)
 
+# Create a caption grob
 nurses_grob_caption <- textGrob(
     paste0("Sources: American Medical Association Master File",
           "\nKaiser Family Foundation"),
@@ -1313,6 +1413,7 @@ nurses_grob_caption <- textGrob(
     hjust = 1,
     x = .98)
 
+# Combine all plots and grobs into a single plot
 nurses_plot_collection <- grid.arrange(
   arrangeGrob(
     nurses_plot1,
@@ -1330,12 +1431,10 @@ nurses_plot_collection <- grid.arrange(
   top = arrangeGrob(nurses_grob_tt, nurses_grob_st),
   bottom = nurses_grob_caption,
   padding = unit(1.5, "cm")
-  
 )
 
-
-ggsave("plots/p8_nurses.png", nurses_plot_collection, width = 9, height = 8)
+# Save final plot
+ggsave("plots/p9_nurses.png", nurses_plot_collection, width = 9, height = 8)
 
 
 ```
-
