@@ -13,6 +13,7 @@ library(lubridate)
 library(tidyverse)
 library(scales)
 library(ggrepel)
+library(gganimate)
 library(tidycensus)
 library(sf)
 library(tigris)
@@ -165,7 +166,7 @@ bg_geo_simplified %>%
 
 ```
 
-```{r pop_map, message=FALSE, fig.width=9, fig.height=5, fig.align='center'}
+```{r pop_map, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
 # This chunk does the following:
 # 1. Load the previously created block group data
 # 2. Grabs state geometries from the census, converts to 2163 (Albers)
@@ -379,10 +380,9 @@ ggplot() +
     axis.title = element_blank(),
     axis.text = element_blank(),
     axis.ticks = element_blank(),
-    plot.margin = margin(r = 5),
     legend.position = "none"
   ) +
-  ggsave("plots/p1_pop_map.png", width = 9, height = 5)
+  ggsave("plots/p1_pop_map.png", width = 9, height = 7)
 
 ```
 
@@ -729,11 +729,12 @@ wages_data <- read_dta("data/acs_pers_phys.dta") %>%
     ) %>%
   mutate(
     ur = ifelse(metro %in% c(2, 3, 4), "Urban", "Rural"),
-    sex = ifelse(sex == 1, "Male", "Female")
+    sex = ifelse(sex == 1, "Male", "Female"),
+    statefip = str_pad(statefip, 2, "left", "0")
     ) %>%
   mutate_at(vars(year, age, perwt), funs(as.numeric))
 
-# Aggregate the data and plot
+# Aggregate the IPUMS data and plot
 wages_data %>%
   mutate(income = inctot_cpi99 * 1.5) %>% 
   group_by(year, ur) %>%
@@ -744,6 +745,14 @@ wages_data %>%
   ) %>%
   mutate(ur = factor(ur, levels = c("Rural", "Urban"))) %>%
 ggplot(aes(x = factor(year), color = ur, group = ur)) +
+  geom_rect(aes(
+    xmin = 3.05, xmax = 4.75, ymin = 380000, ymax = 425000),
+    fill = "white", color = "transparent"
+    ) +
+  geom_rect(aes(
+    xmin = 0.7, xmax = 2.5, ymin = 310000, ymax = 390000),
+    fill = "white", color = "transparent"
+    ) +
   geom_point(
     aes(y = middle),
     position = position_dodge(width = 0.2),
@@ -766,7 +775,6 @@ ggplot(aes(x = factor(year), color = ur, group = ur)) +
     )
   ) +
   scale_y_continuous(
-    # limits = c(70000, 400000),
     expand = c(0.01, 0.05),
     label = function(l) {trans = l / 1000; paste0("$", trans, "K")},
     oob = function(x, ...) x
@@ -781,22 +789,6 @@ ggplot(aes(x = factor(year), color = ur, group = ur)) +
     y = "Median Income (In 2017 USD)"
   ) +
   annotate(
-    "text", x = 4.68, y = 386000,
-    label = paste("In 2015, the median rural doctor made",
-                  "\n $41K more than the median urban one"),
-    vjust = 0, hjust = 1, color = "grey35"
-  ) +
-    annotate(
-    "text", x = 4.68, y = 386000,
-    label = paste("In 2015, the median rural doctor made",
-                  "\n $41K more than the median urban one"),
-    vjust = 0, hjust = 1, color = "grey35"
-  ) +
-  annotate(
-    "segment", x = 4.93, xend = 4.7,
-    y = 240000, yend = 375000, color = "grey45"
-  ) +
-  annotate(
     "text", x = 1.3, y = 170000, label = "Rural",
     color = ama_colors[length(ama_colors)], size = 6, fontface = "bold"
   ) +
@@ -805,24 +797,34 @@ ggplot(aes(x = factor(year), color = ur, group = ur)) +
     color = ama_colors[2], size = 6, fontface = "bold"
   ) +
   annotate(
-    "segment", x = 2.91, xend = 2.5,
-    y = 310000, yend = 325000, color = "grey45"
+    "text", x = 4.68, y = 386000, lineheight = 0.9,
+    label = paste("In 2015, the median rural doctor made",
+                  "\n $41K more than the median urban one"),
+    vjust = 0, hjust = 1, color = "grey35"
   ) +
   annotate(
-    "text", x = 2.46, y = 328000,
+    "segment", x = 4.93, xend = 4.7,
+    y = 237000, yend = 378000, color = "grey45"
+  ) +
+  annotate(
+    "text", x = 2.46, y = 330000, lineheight = 0.9,
     label = paste("Dotted lines represent the interquartile",
                   "\nrange of income. Since 2000, this range",
                   "\nhas exploded, with the top quartile of",
                   "\ndoctors making more than $400K per year"),
-    vjust = 0.245, hjust = 1, color = "grey35"
+    vjust = 0.15, hjust = 1, color = "grey35"
+  ) +
+  annotate(
+    "segment", x = 2.91, xend = 2.5,
+    y = 310000, yend = 325000, color = "grey45"
   ) +
   theme_ama() +
   theme(
     legend.position = "none",
     axis.text = element_text(size = 13),
     axis.ticks.x = element_blank(),
-    axis.title.x = element_text(margin = margin(t = 10), size = 16),
-    axis.title.y = element_text(margin = margin(r = 12), size = 16),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 12)),
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank()
   ) +
@@ -1172,10 +1174,9 @@ ggplot() +
 # 1. Loads Kaiser Family Foundation data on the number of nurses per state
 # 2. Joins KFF data to previously made data on the number of docs per state
 # 3. Determines the rank of all states in terms of nurse/doc pop per 100k
-# 4. Creates an indicator for the top decile of rank changes
-# 5. Creates a rank-change subplot for docs vs nurse practitioners
-# 6. Creates a rank-change subplot for docs vs registered nurses
-# 7. Combines both plots with grid.arrange and adds title, subtitle, etc
+# 4. Selects the top 4 largest changes in total rank
+# 5. Creates a plot showing the rank change for these 4 states as an additive
+#    facet plot
 
 # Load in nurse data from the Kaiser Family Foundation and merge doc data
 nurses_data <- read_csv("data/kff_states_raw_data.csv") %>%
@@ -1199,242 +1200,198 @@ nurses_rank <- left_join(
   ) %>%
   select(-NAME, -variable, -moe) %>%
   st_set_geometry(NULL) %>%
-  filter(state != "HI") %>%
+  filter(!state %in% c("HI", "DC")) %>%
   mutate_at(
     vars(np_total:doc_count),
     funs(rank((. / state_pop) * 1e5))
   ) %>%
   mutate(
-    doc_np_rank_diff = abs(doc_count - np_total) > quantile(abs(doc_count - np_total), .9),
-    doc_pa_rank_diff = abs(doc_count - pa_total) > quantile(abs(doc_count - pa_total), .9),
-    doc_rn_rank_diff = abs(doc_count - rn_total) > quantile(abs(doc_count - rn_total), .9)
+    total_rank = rank(abs(doc_count - rn_total) - abs(rn_total - np_total))
   ) %>%
-  gather(type, rank, np_total:doc_count) 
-
-# Create a plot of state rank, docs per 100k vs NPs per 100k
-nurses_plot1 <- ggplot() +
-  geom_line(
-    data = nurses_rank %>%
-      filter(doc_np_rank_diff == FALSE & type %in% c("doc_count", "np_total")),
-    aes(x = type, y = rank, color = factor(doc_np_rank_diff), group = state_code),
-    size = 0.9
-  ) +
-  geom_line(
-    data = nurses_rank %>%
-      filter(doc_np_rank_diff == TRUE & type %in% c("doc_count", "np_total")),
-    aes(x = type, y = rank, color = factor(doc_np_rank_diff), group = state_code),
-    size = 0.9
-  ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "doc_count" & rank %% 2 == 0),
-    aes(x = type, y = rank, label = state),
-    nudge_x = -0.10, hjust = 1, vjust = 0.5, size = 4.25, color = "grey35"
-  ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "doc_count" & rank %% 2 == 0),
-    aes(x = type, y = rank, label = "─", color = factor(doc_np_rank_diff)),
-    nudge_x = 0, hjust = 1, vjust = 0.45, size = 7
-  ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "doc_count" & rank %% 2 != 0),
-    aes(x = type, y = rank, label = state),
-    nudge_x = -0.25, hjust = 1, vjust = 0.5, size = 4.25, color = "grey35"
-  ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "doc_count" & rank %% 2 != 0),
-    aes(x = type, y = rank, label = "───", color = factor(doc_np_rank_diff)),
-    nudge_x = 0, hjust = 1, vjust = 0.45, size = 7
-  ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "np_total" & rank %% 2 == 0),
-    aes(x = type, y = rank, label = state),
-    nudge_x = 0.10, hjust = 0, vjust = 0.5, size = 4.25, color = "grey35"
-  ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "np_total" & rank %% 2 == 0),
-    aes(x = type, y = rank, label = "─", color = factor(doc_np_rank_diff)),
-    nudge_x = 0, hjust = 0, vjust = 0.45, size = 7
-  ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "np_total" & rank %% 2 != 0),
-    aes(x = type, y = rank, label = state),
-    nudge_x = 0.25, hjust = 0, vjust = 0.5, size = 4.25, color = "grey35"
-  ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "np_total" & rank %% 2 != 0),
-    aes(x = type, y = rank, label = "───", color = factor(doc_np_rank_diff)),
-    nudge_x = 0, hjust = 0, vjust = 0.45, size = 7
-  ) +
-  scale_x_discrete(expand = c(0, 0)) +
-  scale_y_continuous(expand = c(0, 0)) +
-  scale_color_manual(
-    name = "",
-    values = c(
-      "TRUE" = ama_colors[length(ama_colors)],
-      "FALSE" = "transparent"),
-    labels = c(
-      "TRUE" = "Top Decile of Rank Changes",
-      "FALSE" = ""),
-    guide = guide_legend(override.aes = list(
-      color = c(NA, ama_colors[length(ama_colors)]),
-      size = 8))
-  ) +
-  coord_cartesian(clip = "off") +
-  labs(
-    y = "State Rank (In Doctors/Nurses Per 100k Pop.)",
-    x = "Doctors        VS         Nurse Practitioners"
-  ) +
-  theme_ama() +
-  theme(
-    legend.position = c(0.5, -0.09),
-    legend.margin = margin(0, 0, 0, 0),
-    legend.key = element_blank(),
-    plot.margin = margin(l = 0.5, r = 1.5, t = 1, unit = "lines"),
-    panel.border = element_blank(),
-    panel.grid = element_blank(),
-    axis.title.x = element_text(margin = margin(t = 12)),
-    axis.title.y = element_text(margin = margin(r = 35), size = 18),
-    axis.line.y = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank() 
+  gather(type, rank, np_total:doc_count) %>%
+  mutate(
+    type = factor(type,
+      levels = rev(c("doc_count", "rn_total", "np_total", "pa_total"))),
+    rank_cutoff = total_rank >= max(total_rank) - 3
+  ) %>%
+  filter(type != "pa_total")
+  
+# Selects the four states that have the largest rank changes
+nurses_rank_select <- nurses_rank %>%
+  filter(rank_cutoff) %>%
+  group_by(state) %>%
+  mutate(group_idx = group_indices() / n_groups(.) / 2.5) %>%
+  ungroup() %>%
+  mutate(group_idx = group_idx - median(group_idx)) %>%
+  uncount(rep(4:1, 3), .id = "id") %>%
+  mutate(id = abs(id - 5)) %>%
+  group_by(id, state) %>%
+  mutate(id_color = case_when(
+    state == "MS" & id == 1 ~ 1,
+    state == "WA" & id == 2 ~ 1,
+    state == "IA" & id == 3 ~ 1,
+    state == "OR" & id == 4 ~ 1,
+    TRUE ~ 0
+  )) 
+  
+# Some recoding tomfoolery to get the facet wrap working
+nurses_rank <- nurses_rank %>%
+  uncount(4, .id = "id") %>%
+  left_join(
+    nurses_rank_select %>% select(state, type, id_color),
+    by = c("state", "type", "id")
+  ) %>%
+  mutate(
+    id_color = factor(replace_na(id_color, 2)),
+    id = recode(id,
+      "1" = "Mississippi",
+      "2" = "Washington",
+      "3" = "Iowa",
+      "4" = "Oregon"),
+    id = factor(id, levels = c("Mississippi", "Washington", "Iowa", "Oregon"))
   ) 
 
-# Create a plot of state rank, docs per 100k vs RNs per 100k
-nurses_plot2 <- ggplot() +
+nurses_rank_select <- nurses_rank_select %>%
+  ungroup() %>%
+  mutate(
+    id = recode(id,
+      "1" = "Mississippi",
+      "2" = "Washington",
+      "3" = "Iowa",
+      "4" = "Oregon"),
+    id = factor(id, levels = c("Mississippi", "Washington", "Iowa", "Oregon"))
+  ) 
+
+# Create the facet wrap plot
+nurses_rank %>%
+ggplot() +
+  geom_text(
+    aes(x = rank, y = type, label = state, color = id_color), size = 2.5
+  ) +
   geom_line(
-    data = nurses_rank %>%
-      filter(doc_rn_rank_diff == FALSE & type %in% c("doc_count", "rn_total")),
-    aes(x = type, y = rank, color = factor(doc_rn_rank_diff), group = state_code),
-    size = 0.9
+    data = nurses_rank_select %>% filter(type %in% c("doc_count", "rn_total")),
+    aes(x = rank, y = 2.5 + group_idx, group = state, color = factor(id_color)),
+    size = 1.0
+  ) +
+  geom_segment(
+    data = nurses_rank_select %>% filter(type == "doc_count"),
+    aes(
+      x = rank, xend = rank,
+      y = 2.85, yend = 2.5 + group_idx,
+      color = factor(id_color)),
+    size = 1.0
+  ) +
+  geom_segment(
+    data = nurses_rank_select %>% filter(type == "rn_total"),
+    aes(
+      x = rank, xend = rank,
+      y = 2.5 + group_idx, yend = 2.15,
+      color = factor(id_color)),
+    size = 1.0
   ) +
   geom_line(
-    data = nurses_rank %>%
-      filter(doc_rn_rank_diff == TRUE & type %in% c("doc_count", "rn_total")),
-    aes(x = type, y = rank, color = factor(doc_rn_rank_diff), group = state_code),
-    size = 0.9
+    data = nurses_rank_select %>% filter(type %in% c("rn_total", "np_total")),
+    aes(x = rank, y = 1.5 + group_idx, group = state, color = factor(id_color)),
+    size = 1.0
+  ) +
+  geom_segment(
+    data = nurses_rank_select %>% filter(type == "rn_total"),
+    aes(
+      x = rank, xend = rank,
+      y = 1.85, yend = 1.5 + group_idx,
+      color = factor(id_color)),
+    size = 1.0
+  ) + 
+  geom_segment(
+    data = nurses_rank_select %>% filter(type == "np_total"),
+    aes(
+      x = rank, xend = rank,
+      y = 1.5 + group_idx, yend = 1.15,
+      color = factor(id_color)),
+    size = 1.0
   ) +
   geom_text(
-    data = nurses_rank %>% filter(type == "doc_count" & rank %% 2 == 0),
-    aes(x = type, y = rank, label = state),
-    nudge_x = -0.10, hjust = 1, vjust = 0.5, size = 4.25, color = "grey35"
+    data = tibble(
+      id = as.factor(c("Mississippi", "Washington", "Iowa", "Oregon")),
+      label = c("Doctors\n\nNurse\nPracitioners\n\nRegistered\nNurses",
+                rep("Docs\n\n\nNPs\n\n\nRNs", 3))),
+    aes(x = 0.3, y = 2.03, label = label), lineheight = 0.885,
+    size = 3.8, hjust = 1, vjust = 0.5, color = "grey35"
   ) +
   geom_text(
-    data = nurses_rank %>% filter(type == "doc_count" & rank %% 2 == 0),
-    aes(x = type, y = rank, label = "─", color = factor(doc_rn_rank_diff)),
-    nudge_x = 0, hjust = 1, vjust = 0.45, size = 7
+    data = tibble(
+      id = as.factor(c("Mississippi", "Washington", "Iowa", "Oregon")),
+      label = c("Least", "", "", "")),
+    aes(x = 6, y = 4.28, label = label),
+    size = 5, hjust = 0, color = "grey35"
+  ) +
+  geom_segment(
+    data = tibble(
+      id = as.factor(c("Mississippi", "Washington", "Iowa", "Oregon")),
+      color = c("arrow_col", "null_col", "null_col", "null_col")),
+    aes(x = 5.5, xend = 1, y = 4.28, yend = 4.28, color = color),
+    arrow = arrow(length = unit(0.1, "inches"), type = "closed")
   ) +
   geom_text(
-    data = nurses_rank %>% filter(type == "doc_count" & rank %% 2 != 0),
-    aes(x = type, y = rank, label = state),
-    nudge_x = -0.24, hjust = 1, vjust = 0.5, size = 4.25, color = "grey35"
+    data = tibble(
+      id = as.factor(c("Mississippi", "Washington", "Iowa", "Oregon")),
+      label = c("Most", "", "", "")),
+    aes(x = 44, y = 4.28, label = label),
+    size = 5, hjust = 1, color = "grey35"
   ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "doc_count" & rank %% 2 != 0),
-    aes(x = type, y = rank, label = "───", color = factor(doc_rn_rank_diff)),
-    nudge_x = 0, hjust = 1, vjust = 0.45, size = 7
+  geom_segment(
+    data = tibble(
+      id = as.factor(c("Mississippi", "Washington", "Iowa", "Oregon")),
+      color = c("arrow_col", "null_col", "null_col", "null_col")),
+    aes(x = 44.5, xend = 49, y = 4.28, yend = 4.28, color = color),
+    arrow = arrow(length = unit(0.1, "inches"), type = "closed")
   ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "rn_total" & rank %% 2 == 0),
-    aes(x = type, y = rank, label = state),
-    nudge_x = 0.10, hjust = 0, vjust = 0.5, size = 4.25, color = "grey35"
+  scale_x_continuous(
+    position = "top",
+    expand = c(0.01, 0.0)
   ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "rn_total" & rank %% 2 == 0),
-    aes(x = type, y = rank, label = "─", color = factor(doc_rn_rank_diff)),
-    nudge_x = 0, hjust = 0, vjust = 0.45, size = 7
+  scale_y_discrete(
+    expand = c(0.1, 0.1),
+    labels = c("NPs", "RNs", "MDs")
   ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "rn_total" & rank %% 2 != 0),
-    aes(x = type, y = rank, label = state),
-    nudge_x = 0.24, hjust = 0, vjust = 0.5, size = 4.25, color = "grey35"
+  scale_color_manual(
+    values = c(
+      "2" = "grey80",
+      "1" = ama_colors[length(ama_colors)],
+      "0" = ama_colors[length(ama_colors) - 2],
+      "arrow_col" = "grey35",
+      "null_col" = "transparent")
   ) +
-  geom_text(
-    data = nurses_rank %>% filter(type == "rn_total" & rank %% 2 != 0),
-    aes(x = type, y = rank, label = "───", color = factor(doc_rn_rank_diff)),
-    nudge_x = 0, hjust = 0, vjust = 0.45, size = 7
-  ) +
-  scale_x_discrete(expand = c(0, 0)) +
-  scale_y_continuous(expand = c(0, 0)) +
-  scale_color_manual(values = c(
-    "TRUE" = ama_colors[length(ama_colors)],
-    "FALSE" = "transparent")
-  ) +
-  coord_cartesian(clip = "off") +
+  scale_fill_manual(values = c("transparent", "white")) +
+  facet_wrap(vars(id), ncol = 1) +
+  coord_cartesian(xlim = c(1, 49), ylim = c(1, 3), clip = "off") +
   labs(
-    y = "State Rank (In Doctors/Nurses Per 100k Pop.)",
-    x = "Doctors          VS          Registered Nurses"
+    title = "Nurses Serve as Substitutes in States with Few Doctors",
+    subtitle = paste(
+      "States with the lowest number of doctors per 100K people",
+      "have the highest number of nurses, and visa versa"),
+    y = "Type of Practitioner",
+    x = "States Ranked by # of Practitioners (Per 100K Pop.)",
+    caption = paste0(
+      "Sources: American Medical Association Master File",
+      "\nKaiser Family Foundation")
   ) +
   theme_ama() +
   theme(
     legend.position = "none",
-    panel.background = element_rect(fill = "transparent"),
-    plot.background = element_rect(fill = "transparent"),
-    plot.margin = margin(l = 3.3, r = 2, t = 1, unit = "lines"),
-    panel.border = element_blank(),
+    panel.border = element_rect(color = "transparent"),
     panel.grid = element_blank(),
-    axis.title.x = element_text(margin = margin(t = 12)),
-    axis.title.y = element_blank(),
-    axis.line.y = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank() 
-  ) 
-
-# Create a title grob to arrange with gtable
-nurses_grob_tt <- textGrob(
-    "Nurses Serve as Substitutes in States with Fewer Doctors",
-    gp = gpar(
-      fontsize = 18,
-      fontfamily = "Helvetica",
-      fontface = "bold",
-      col = "grey25"), 
-    hjust = 0,
-    x = 0.07)
-
-# Create a subtitle grob
-nurses_grob_st <- textGrob(
-    paste("States with the lowest number of doctors per 100K people",
-          "have the highest number of nurses, and visa versa"),
-    gp = gpar(
-      fontsize = 12,
-      fontfamily = "Helvetica",
-      col = "grey35"),
-    hjust = 0,
-    x = 0.07)
-
-# Create a caption grob
-nurses_grob_caption <- textGrob(
-    paste0("Sources: American Medical Association Master File",
-          "\nKaiser Family Foundation"),
-    gp = gpar(
-      fontsize = 12,
-      fontfamily = "Helvetica",
-      fontface = "italic",
-      col = "grey25"),
-    hjust = 1,
-    x = .98)
-
-# Combine all plots and grobs into a single plot
-nurses_plot_collection <- grid.arrange(
-  arrangeGrob(
-    nurses_plot1,
-    segmentsGrob(
-      x0 = unit(1.5,"npc"),
-      y0 = unit(0.0,"npc"),
-      x1 = unit(1.5,"npc"),
-      y1 = unit(0.98,"npc"),
-      gp = gpar(lwd = 2.0, col = "grey25")
-      ),
-    nurses_plot2,
-    nrow = 1,
-    widths = c(1, 0.05, 1),
-    clip = "off"),
-  top = arrangeGrob(nurses_grob_tt, nurses_grob_st),
-  bottom = nurses_grob_caption,
-  padding = unit(1.5, "cm")
-)
-
-# Save final plot
-ggsave("plots/p9_nurses.png", nurses_plot_collection, width = 9, height = 8)
-
+    panel.spacing.y = unit(0, "pt"),
+    strip.background = element_rect(color = "transparent"),
+    strip.text = element_text(size = 14, color = "grey55", face = "bold"),
+    plot.subtitle = element_text(margin = margin(b = 20)),
+    plot.caption = element_text(lineheight = 1.1),
+    axis.title.x = element_text(margin = margin(b = 10)),
+    axis.title.y = element_text(margin = margin(r = 40)),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank()
+  ) +
+  ggsave("plots/p9_nurses.png", width = 9, height = 8)
 
 ```
