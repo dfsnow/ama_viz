@@ -4,11 +4,10 @@ author: "Daniel Snow"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 output: 
   html_document:
-    code_folding: hide
     theme: sandstone
 ---
 
-```{r setup, warning=FALSE, message=FALSE, echo=FALSE}
+```{r setup, warning=FALSE, message=FALSE, include=FALSE}
 library(lubridate)
 library(tidyverse)
 library(scales)
@@ -24,6 +23,7 @@ library(grid)
 library(gridExtra)
 library(extrafont)
 loadfonts()
+knitr::opts_chunk$set(echo=FALSE)
 ```
 
 ```{r data_load, message=FALSE, warning=FALSE, echo=FALSE}
