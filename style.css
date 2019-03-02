@@ -1,0 +1,59 @@
+.main-container {
+  max-width: 90vw;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.text-center {
+  width: 70%;
+  margin: auto;
+  text-align: left;
+}
+
+.title {
+  font-size: 38px;
+  font-weight: bold;
+  color: #262626;
+  line-height: 120%;
+}
+
+#header {
+  width: 70%;
+  margin: auto;
+  text-align: left;
+}
+
+a {
+  color: #2a044a;
+}
+
+p {
+  font-size: 18px;
+}
+
+summary {
+  font-size: 18px;
+}
+
+h1 {
+  font-size: 28px;
+  font-weight: bold;
+  color: #404040;
+  line-height: 120%;
+}
+
+h2 { 
+  font-size: 22px;
+  color: #595959;
+}
+
+h3 { 
+  font-size: 20px;
+  color: #595959;
+}
+
+h4 { 
+  font-size: 20px;
+  font-style: italic;
+  color: #737373;
+}

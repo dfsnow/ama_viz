@@ -1,11 +1,14 @@
 ---
 title: "The Coming Crisis: Exploring the U.S. Rural Physician Shortage"
-author: "Daniel Snow"
+author: "By Daniel Snow"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 output: 
   html_document:
     theme: sandstone
+    css: style.css
 ---
+
+<div class = "text-center">
 
 ```{r setup, warning=FALSE, message=FALSE, include=FALSE}
 library(lubridate)
@@ -101,7 +104,6 @@ ggplot() +
     size = 5) +
   scale_x_discrete(expand = c(0, 0)) + 
   scale_y_discrete(expand= c(0, 0)) + 
-  labs(title = "AMA Color Palette") +
   theme_ama() +
   theme(
     axis.title = element_blank(),
@@ -116,9 +118,13 @@ ggplot() +
 
 Rural America is facing a massive and growing shortage of physicians. For the past few decades, doctors have flocked to cities seeking better career opportunities, higher pay, and urban amenities. As a result, only 10% of physicians now live in rural areas, compared to 20% of the overall U.S. population. This maldistribution has potentially disastrous consequences. Studies have shown that having physical access to a doctor is an important determinant of health. For many rural Americans, getting this access requires a long drive and a potentially longer wait, resulting in health consequences. This problem is likely to get worse in the coming decades, as an increasing percentage of physicians choose to practice in urban areas.
 
-# Part 1: Mapping the Rural Doctor Shortage {#part1}
+# Mapping the Rural Doctor Shortage {#part1}
 
 To better understand the causes and consequences of this shortage, let's start by examining the overall distribution of doctors in the U.S. The map below shows the location of every practicing U.S. MD (Doctor of Medicine) and around 40% of DOs (Doctors of Osteopathic Medicine). An initial look at this map reveals that doctors are clustered around major towns and cities. By itself this isn't problematic; doctors live where there is high demand for their services. But importantly, this map also reveals where doctors do *not* live. Large parts of Texas, Nevada, and the mountain states have a very sparse distribution of doctors, even relative to their sparse populations. For people in those rural areas, this means driving hours to see a doctor that may be busier (has more patients) than an urban doctor. 
+
+</div>
+
+<br>
 
 ```{r pop_map_prep, message=FALSE, eval=FALSE}
 # This chunk does the following:
@@ -393,9 +399,17 @@ ggplot() +
 
 ```
 
+<br>
+
+<div class = "text-center">
+
 The trends in doctor density become more obvious after aggregating to the state level. The map below shows the physician-to-population ratio (physicians per 100K people) of each state. This ratio is grouped into quantiles for easier viewing. Southern states (Mississippi and Arkansas), plain states (Iowa, Nebraska), and mountain states (Wyoming, Idaho) have a low number of doctors relative to their population, while the coasts (New Jersey, California) and Midwest (Illinois, Minnesota) have a relative surplus. The Northeast (New York, Massachusetts) also has an enormous surplus of doctors compared to the rest of the country. The causes of this maldistribution are explored in [Part 2](#part2). 
 
-```{r state_map, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
+</div>
+
+<br>
+
+```{r state_map, out.width = "1000px", message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
 # This chunk does the following:
 # 1. Grab state geographies from the ACS, then simplify them
 # 2. Get the number of doctors in each state from the AMA
@@ -469,6 +483,10 @@ ggplot() +
 
 ```
 
+<br>
+
+<div class = "text-center">
+
 While the state-level trends are informative, the most important and least obvious trends appear at the county level. The map below shows the relative level of primary care accessibility for every county in the United States. The accessibility measurement is based on a forthcoming paper by Saxon and Snow. It uses an optimization-based framework to minimize the driving time and cost of congestion for each patient in a network. In other words, the algorithm chooses the nearest and least-crowded doctor for all patients, *accounting for the doctor choice of all other patients*. 
 
 Since the algorithm runs over the entire U.S., it yields a nationally relative index number that can be used to compare regional or county-level variation in accessibility. In highly accessible (purple) areas, patients drive only a short distance to their doctor and the doctor's office is unlikely to be crowded when they arrive. In inaccessible (pink) areas, patients may drive for hours to their doctor, only to find themselves competing for attention with the many other patients that doctor serves. 
@@ -476,6 +494,10 @@ Since the algorithm runs over the entire U.S., it yields a nationally relative i
 This new method for measuring accessibility reveals an interesting trend: it is not rurality *per se* that influences where doctors live, but rather educational attainment level. In other words, doctors like to live in places where there are many other highly educated people. On the map, this can be seen most clearly in the New England region. Maine, Vermont, and New Hampshire have excellent primary care accessibility despite being relatively rural states. Similarly, Minnesota, Wisconsin, and Iowa are highly accessible despite being mostly rural. Both of these regions contain a large number of highly educated people relative to their population. 
 
 Conversely, Texas and much of the South have poor accessibility despite being relatively more urban. These areas have lower average educational attainment than the rest of the U.S. Previous research (Lombardo, Saxon, Snow and Black) has shown that educational attainment explains over 40% of the variation in physician supply, while population density (rurality) explains less than 10%. However, in most of the U.S., rurality and educational attainment are closely linked. The most severe shortage areas, such as those in southwest Texas, are both extremely rural and extremely under-educated. As such, it is still important to consider the urban/rural context of the shortage. 
+
+</div>
+
+<br>
 
 ```{r access_prep, message=FALSE, eval=FALSE}
 # Plot of access scores for all counties, this code is to attempt to speed up
@@ -638,7 +660,15 @@ ggplot() +
 
 ```
 
+<br>
+
+<div class = "text-center">
+
 Age is also an important part of the urban vs rural doctor story. In the past three decades, more and more young doctors have settled in cities, while very few have moved to rural areas. Furthermore, these young urban doctors tend to stay put, they don't move to rural areas as they get older. As a result, rural doctors tend to be an average of 18 years older than their urban peers. In the plot below, the bulk of the distribution of rural doctors is around 60 years old. Many of these doctors will retire in the next few decades and will not be replaced, severely exacerbating the existing crisis.
+
+</div>
+
+<br>
 
 ```{r pop_pyramid, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
 # This chunk does the following:
@@ -716,11 +746,19 @@ ggplot() +
   ggsave("plots/p4_pop_pyramid.pdf", width = 9, height = 7) 
 ```
 
-# Part 2: What's Causing the Rural Doctor Shortage? {#part2}
+<br><br>
+
+<div class = "text-center">
+
+# What's Causing the Rural Doctor Shortage? {#part2}
 
 There are many explicit causes of the rural physician shortage. Hospital consolidation, increased specialization, and better opportunities for advancement all drive physicians toward urban areas. However, the broader story of the rural shortage is more complicated. 
 
 The plot below shows the median wage of urban and rural doctors over time. Intuitively, one might expect rural doctors to make less than urban ones. However, since 2000, the wage gap between urban and rural doctors has expanded dramatically, and rural doctors now make roughly $40K *more* than their urban counterparts. Despite this rural pay premium, doctors increasingly choose to practice in urban areas. 
+
+</div>
+
+<br>
 
 ```{r wages, message=FALSE, fig.width=9, fig.height=6, fig.align='center'}
 # This chunk does the following:
@@ -845,11 +883,19 @@ ggplot(aes(x = factor(year), color = ur, group = ur)) +
 
 ```
 
+<br>
+
+<div class = "text-center">
+
 By ignoring wage incentives, urban doctors display an overriding hidden preference for urban areas. Previous research (Lombardo et al.) suggests this preference is combination of doctors' preferences for urban amenities and their preference for being around other highly educated people. This partially explains the maldistribution visible in the previous maps. Places such as New England have a high level of educational attainment and nice urban amenities, they therefore have a large number of doctors. Places like Mississippi have low average educational attainment and few urban amenities, they therefore have fewer doctors. 
 
 Doctors have this preference for urban areas regardless of their birthplace. The plot below shows the rurality of where different cohorts of physicians end up attending medical school, doing their residency, and practicing. Each line represents a cohort of physicians born in 1 of 10 core-based statistical area (CBSA) deciles. For example, the pink line represents the most rural-born cohort of doctors, while the purple line represents the most urban-born. Each shaded region represents a different level of rurality. 
 
 All of the doctor cohorts, regardless of their birthplace rurality, end up practicing in urban/suburban areas. After being mechanically forced to urban areas for school (almost all medical schools are in cities), doctors never return to the same rurality level as their birthplace. This indicates that doctors' preferences for urban areas may develop as a result of training in those areas. Based on this assumption, some schools have developed rural programs intended to give doctors a taste of rural life. However, there is little evidence to indicate that such programs increase rural practice retention.
+
+</div>
+
+<br>
 
 ```{r doc_movement, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
 # This chunk does the following:
@@ -978,9 +1024,17 @@ ggplot() +
 
 ```
 
+<br>
+
+<div class = "text-center">
+
 Medical schools also play a role in determining where a doctor chooses to practice. The plot below shows the average MCAT score of each medical school compared to the rurality of the average graduate's practice location. Graduates of better medical schools tend to end up practicing in more urban areas.
 
 The reason for this is two-fold. First, better medical schools tend to be located in large cities. Doctors at these schools likely develop preferences for big city amenities as well as business and social networks that make leaving undesirable. Second, graduates of better medical schools are more likely to be matched with their preferred residency programs, i.e. they are unlikely to be forced to attend less competitive rural programs.
+
+</div>
+
+<br>
 
 ```{r med_schools, message=FALSE, warning=FALSE, fig.width=9, fig.height=7, fig.align='center'}
 # This plot does the following:
@@ -1076,9 +1130,17 @@ ggplot() +
 
 ```
 
+<br>
+
+<div class = "text-center">
+
 The rise in specialist physicians has also contributed to the rural doctor shortage. As more medical students choose high-paying specialties, the proportion of primary care physicians trained each year has decreased, particularly since 2001. The plot below shows this trend. 
 
 Specialists are much more likely to practice in urban areas than primary care physicians. Rural areas rarely produce the demand needed to support a specialist. Even if rural demand was sufficient, most rural hospitals do not have the infrastructure, equipment, or funds necessary to support full-time specialists. As a result, specialists are much more likely to live and practice in urban areas.
+
+</div>
+
+<br>
 
 ```{r specialties, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
 # This chunk does the following:
@@ -1180,7 +1242,11 @@ ggplot() +
 
 ```
 
-# Part 3: How Do We Fix the Rural Doctor Shortage? {#part3}
+<br><br>
+
+<div class = "text-center">
+
+# How Do We Fix the Rural Doctor Shortage? {#part3}
 
 The current state of rural America is bleak. Doctors are overwhelmingly clustered in urban and highly educated areas. The existing cohort of rural doctors is rapidly aging and is unlikely to be replaced. More and more doctors are becoming specialists who can only viably practice in cities. Solving the rural doctor shortage seems like an impossible task. 
 
@@ -1189,6 +1255,10 @@ Previous solutions have focused on increasing the compensation of rural doctors,
 Instead, two solutions should be implemented. First, medical schools should recruit more students from rural areas. Plot 6 shows that such students are the most likely to practice in rural areas. These students have pre-existing preferences for rurality, i.e. they are not as prone to developing strong preferences for urban areas because they already prefer rural ones. Additionally, students from rural areas are already invested in and familiar with rural communities. Recruiting more of these students would undoubtedly bolster the number of rural physicians.
 
 Second, states should focus on training and licensing more nurse practitioners (NPs). The plot below shows that nurse practitioners already serve as substitutes in states with relatively few doctors. NPs can perform the same basic tasks as a primary care physicians but are cheaper and easier to train and license. Substituting NPs in rural areas could reduce the impact of the rural physician shortage and improve basic health outcomes for rural Americans.
+
+</div>
+
+<br>
 
 ```{r nurses, message=FALSE, fig.width=9, fig.height=8, fig.align='center'}
 # This chunk does the following:
@@ -1421,4 +1491,10 @@ ggplot() +
 
 ```
 
+<br>
+
+<div class = "text-center">
+
 The worsening maldistribution of U.S. physicians has potentially disasterous health consequences for millions of Americans. States and the medical community should act quickly to implement practical solutions that increase the recruitment of rural medical students and NPs. 
+
+</div>
