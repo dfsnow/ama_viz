@@ -35,10 +35,7 @@ source("access_merge.R")
 source("ama_filter.R")
 ```
 
-<details>
-  <summary>Show Theme</summary>
-
-```{r theme, fig.align='center', echo=FALSE}
+```{r theme, fig.align='center', fig.height=0.4, fig.width=9, echo=FALSE}
 # Defining a custom AMA theme
 theme_ama <- function(
   base_size = 12,
@@ -98,10 +95,6 @@ ama_colors_10 <- c('#2a044a','#31325d','#44546f','#5b7781','#759c92',
 # Color palette plot
 ggplot() +
   geom_tile(aes(x = 1:6, y = 1), fill = ama_colors) +
-  geom_text(
-    aes(x = 1:6, y = 1, label = ama_colors),
-    color = "white",
-    size = 5) +
   scale_x_discrete(expand = c(0, 0)) + 
   scale_y_discrete(expand= c(0, 0)) + 
   theme_ama() +
@@ -111,10 +104,6 @@ ggplot() +
   )
 
 ```
-
-</details>
-
----
 
 Rural America is facing a massive and growing shortage of physicians. For the past few decades, doctors have flocked to cities seeking better career opportunities, higher pay, and urban amenities. As a result, only 10% of physicians now live in rural areas, compared to 20% of the overall U.S. population. This maldistribution has potentially disastrous consequences. Studies have shown that having physical access to a doctor is an important determinant of health. For many rural Americans, getting this access requires a long drive and a potentially longer wait, resulting in health consequences. This problem is likely to get worse in the coming decades, as an increasing percentage of physicians choose to practice in urban areas.
 
