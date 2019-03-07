@@ -772,7 +772,7 @@ wages_data <- read_dta("data/acs_pers_phys.dta") %>%
     sex = ifelse(sex == 1, "Male", "Female"),
     statefip = str_pad(statefip, 2, "left", "0")
     ) %>%
-  mutate_at(vars(year, age, perwt), funs(as.numeric))
+  mutate_at(vars(year, age, perwt), list(as.numeric))
 
 # Aggregate the IPUMS data and plot
 wages_data %>%
@@ -1283,7 +1283,7 @@ nurses_rank <- left_join(
   filter(!state %in% c("HI", "DC")) %>%
   mutate_at(
     vars(np_total:doc_count),
-    funs(rank((. / state_pop) * 1e5))
+    list(ranks ~ rank((. / state_pop) * 1e5))
   ) %>%
   mutate(
     total_rank = rank(abs(doc_count - rn_total) - abs(rn_total - np_total))
