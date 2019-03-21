@@ -271,7 +271,7 @@ ggplot() +
   geom_sf(
     data = pop_map_states %>%
     filter(!(GEOID %in% c("02", "15"))),
-      fill = "grey85",
+      fill = "grey90",
       color = "grey60"
     ) +
   geom_point(aes(
@@ -307,7 +307,7 @@ ggplot() +
   geom_sf(
     data = pop_map_states %>%
     filter(!(GEOID %in% c("02", "15"))),
-      fill = "grey85",
+      fill = "grey90",
       color = "grey60"
     ) +
   geom_point(aes(
@@ -422,20 +422,29 @@ state_data <- ama_filtered %>%
   group_by(state) %>%
   summarize(doc_count = n())
 
+state_ntile_labels <- c(
+  expression(phantom(x) < 249), "249 - 262", "263 - 295",
+  "296 - 323", "324 - 347", expression(phantom(x) >= 348))
+
 # Plot doctors per 100k on a state-level map
 state_map %>%
   st_transform(2163) %>%
   left_join(state_data, by = c("GEOID" = "state")) %>%
   mutate(
     docs_per_100k = (doc_count / estimate) * 1e5,
-    docs_ntile = ntile(docs_per_100k, 6)
-    ) %>%
+    docs_ntile = cut(
+      docs_per_100k,
+      quantile(docs_per_100k, probs = seq(0, 1, length = 7)),
+      labels = state_ntile_labels,
+      right = FALSE,
+      include.lowest = TRUE)
+  ) %>%
 ggplot() +
-  geom_sf(aes(fill = factor(docs_ntile)), color = "white", size = 0.6) +
+  geom_sf(aes(fill = factor(docs_ntile)), color = "white", size = 0.8) +
   scale_fill_manual(
-    name = "Sextiles of Docs\nPer 100K Pop.",
+    name = "\n\nPhysicians Per\n100K Population",
     values = rev(ama_colors),
-    labels = c("Relative\nShortage", rep("", 4), "Relative\nSurplus")
+    labels = state_ntile_labels
     ) +
   labs(
     title = "Rural States Have a Shortage of Doctors Relative to Their Population",
@@ -461,13 +470,20 @@ ggplot() +
     panel.grid.major = element_line(color = "transparent"),
     panel.grid.minor = element_blank(),
     legend.title = element_text(
-      hjust = 1,
-      margin = margin(l = -20, r = 8)),
+      size = 14,
+      face = "bold",
+      color = "grey25",
+      hjust = 0,
+      lineheight = 1.08),
     legend.text = element_text(margin = margin(r = -3)),
-    legend.position = c(1.015, .22),
-    legend.justification = "right"
+    legend.position = c(0.63, .12),
+    legend.justification = "left"
   ) +
-  guides(fill = guide_legend(label.position = "left", title.hjust = 1)) + 
+  guides(fill = guide_legend(
+    label.position = "left",
+    title.position = "right",
+    reverse = T)
+  ) + 
   ggsave("plots/p2_state_map.pdf", width = 9, height = 7)
 
 ```
@@ -571,7 +587,7 @@ ggplot() +
     width = 1
     ) +
   scale_x_discrete(
-    name = "Level of Primary Care Access",
+    name = "Primary Care Access Level",
     labels = access_bin_labels,
     na.translate = FALSE
     ) +
@@ -977,7 +993,7 @@ ggplot() +
     "text",
     label = paste0(
       "This line represents the group of doctors born in the most rural\n",
-      "decile of Core-based Statistical Areas (CBSA), think rural Kansas"),
+      "decile of Core-based Statistical Areas (CBSA), e.g. rural Kansas"),
     x = 1.41, y = 1.45, color = "grey35", hjust = 0, lineheight = 0.9
     ) +
   annotate(
@@ -1208,13 +1224,13 @@ ggplot() +
     y = 6500, size = 5, color = ama_colors[length(ama_colors)],
     fontface = "bold") + 
   annotate(
-    "text", label = paste0(spec_data_diff$diff[1]),
+    "text", label = comma(spec_data_diff$diff[1]),
     x = 1978.5, y = 5300, size = 4, color = "grey35") +
   annotate(
-    "text", label = paste0(spec_data_diff$diff[2]),
+    "text", label = comma(spec_data_diff$diff[2]),
     x = 1998.3, y = 11200, size = 4.8, color = "grey35") +
   annotate(
-    "text", label = paste0(spec_data_diff$diff[3]),
+    "text", label = comma(spec_data_diff$diff[3]),
     x = 2012.8, y = 13200, size = 6.5, color = "grey35") +
   annotate(
     "text", label = paste(
@@ -1231,25 +1247,7 @@ ggplot() +
 
 ```
 
-<br><br>
-
-<div class = "text-center">
-
-# How Do We Fix the Rural Doctor Shortage? {#part3}
-
-The current state of rural America is bleak. Doctors are overwhelmingly clustered in urban and highly educated areas. The existing cohort of rural doctors is rapidly aging and is unlikely to be replaced. More and more doctors are becoming specialists who can only viably practice in cities. Solving the rural doctor shortage seems like an impossible task. 
-
-Previous solutions have focused on increasing the compensation of rural doctors, yet this strategy seems to be ineffective. Doctors have such a strong preference for urban areas that it overrides any incentives created by relatively small rural wage premiums. Given this preference, the high earnings of most physicians, and the marginal utility of money, it would likely take a *massive* wage premium to begin attracting marginal doctors to rural areas.
-
-Instead, two solutions should be implemented. First, medical schools should recruit more students from rural areas. Plot 6 shows that such students are the most likely to practice in rural areas. These students have pre-existing preferences for rurality, i.e. they are not as prone to developing strong preferences for urban areas because they already prefer rural ones. Additionally, students from rural areas are already invested in and familiar with rural communities. Recruiting more of these students would undoubtedly bolster the number of rural physicians.
-
-Second, states should focus on training and licensing more nurse practitioners (NPs). The plot below shows that nurse practitioners already serve as substitutes in states with relatively few doctors. NPs can perform the same basic tasks as a primary care physicians but are cheaper and easier to train and license. Substituting NPs in rural areas could reduce the impact of the rural physician shortage and improve basic health outcomes for rural Americans.
-
-</div>
-
-<br>
-
-```{r nurses, message=FALSE, fig.width=9, fig.height=8, fig.align='center'}
+```{r nurses, message=FALSE, fig.width=9, fig.height=8, fig.align='center', eval=FALSE}
 # This chunk does the following:
 # 1. Loads Kaiser Family Foundation data on the number of nurses per state
 # 2. Joins KFF data to previously made data on the number of docs per state
@@ -1479,11 +1477,3 @@ ggplot() +
   ggsave("plots/p9_nurses.png", width = 9, height = 8)
 
 ```
-
-<br>
-
-<div class = "text-center">
-
-The worsening maldistribution of U.S. physicians has potentially disasterous health consequences for millions of Americans. States and the medical community should act quickly to implement practical solutions that increase the recruitment of rural medical students and NPs. 
-
-</div>
