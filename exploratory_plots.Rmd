@@ -679,7 +679,7 @@ Unfortunately, these young urban doctors tend to stay put, they don't move to ru
 
 <br>
 
-```{r pop_pyramid, message=FALSE}
+```{r pop_pyramid, message=FALSE, fig.width=9, fig.height=7, fig.align='center'}
 # This chunk does the following:
 # 1. Loads population data for each CBSA
 # 2. Bin doctors into age and rurality group, then get count per capita (100k)
