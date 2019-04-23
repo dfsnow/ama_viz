@@ -440,7 +440,7 @@ state_map %>%
       include.lowest = TRUE)
   ) %>%
 ggplot() +
-  geom_sf(aes(fill = factor(docs_ntile)), color = "white", size = 0.8) +
+  geom_sf(aes(fill = factor(docs_ntile)), color = "white", size = 0.5) +
   scale_fill_manual(
     name = "\n\nPhysicians Per\n100K Population",
     values = rev(ama_colors),
@@ -449,8 +449,8 @@ ggplot() +
   labs(
     title = "Rural States Have a Shortage of Doctors Relative to Their Population",
     subtitle = paste0(
-      "Measuring physician density per 100k people, the South, Southwest\n",
-      "and Great Plains all face a shortage of both specialists and GPs"),
+      "Measuring physician density per 100k people, the South, Southwest, and Great\n",
+      "Plains all face a shortage of both specialists and primary care providers"),
     caption = "Source: American Medical Association Master File"
   ) +
   theme_void() +
@@ -461,7 +461,7 @@ ggplot() +
     axis.ticks = element_blank(),
     plot.title = element_text(margin = margin(t = 10), hjust = .7),
     plot.subtitle = element_text(
-      hjust = .7,
+      hjust = .62,
       margin = margin(t = 7, b = -35),
       lineheight = 1.2),
     plot.caption = element_text(
@@ -492,9 +492,9 @@ ggplot() +
 
 <div class = "text-center">
 
-The true nature of the doctor shortage can be seen more clearly at the county level. The map below shows the relative level of primary care accessibility for every county in the United States. This measurement uses a relatively new technique which minimizes the driving time and cost of congestion for each patient. In other words, the algorithm chooses the nearest and least-crowded doctor for all patients, accounting for the doctor choice of all other patients.
+The true nature of the doctor shortage can be seen more clearly at the county level. The map below shows an index of the relative level of primary care accessibility for every county in the United States. This index is calculated using a new technique which minimizes the driving time and cost of congestion for each patient. In other words, it allows patients to make a trade-off between distance and crowdedness, with patients moving farther to avoid extremely crowded providers. This method adds to previous literature on spatial accessibility, which is often measured simply as the patient-to-provider ratio of a given space.
 
-Since the algorithm is applied to the entire U.S., it yields a nationally relative index number that can be used to compare regional or county-level variation in accessibility. In highly accessible (purple) areas, patients drive only a short distance to their doctor and the doctor’s office is unlikely to be crowded when they arrive. In inaccessible (pink) areas, patients may drive for hours to their doctor, only to find themselves competing for attention with the many other patients that doctor serves.
+Since the algorithm is applied to the entire U.S., the index number it yields is nationally relative and can be used to compare regional or county-level variation in accessibility. In highly accessible (purple) areas, patients drive only a short distance to their doctor and the doctor’s office is unlikely to be crowded when they arrive. In inaccessible (pink) areas, patients may drive for hours to their doctor, only to find themselves competing for attention with the many other patients that doctor serves.
 
 The results from this new method support the hypothesis that physicians prefer to live in highly educated areas. On the map, this can be seen most clearly in the New England region. Maine, Vermont, and New Hampshire have excellent primary care accessibility despite being relatively rural states. Similarly, states in the upper Midwest such as Minnesota, Wisconsin, and Iowa are highly accessible despite being mostly rural. All of these states contain a large number of highly educated people relative to their population. Conversely, Texas and much of the South have poor accessibility despite being relatively more urban. These areas have lower average educational attainment than the rest of the U.S.
 
@@ -1218,7 +1218,7 @@ ggplot() +
     labels = med_ur_labels
     ) +
   scale_y_continuous(limits = c(499, 521), breaks = seq(499, 521, by = 4)) +
-  scale_size_continuous(name = "# of Graduates") +
+  scale_size_continuous(name = "# of Graduates", range = c(1, 8)) +
   labs(
     title = "Competitive Medical Schools Send Their Graduates to Urban Areas",
     subtitle = paste("The higher the average MCAT score of the school,", 
